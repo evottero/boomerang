@@ -2,7 +2,7 @@
 
 // Service worker : met le site en cache pour qu'il fonctionne sans réseau.
 // Change VERSION à chaque mise en ligne pour forcer la mise à jour du cache.
-const VERSION = 'v0.0.1';
+const VERSION = 'v0.0.2';
 const CACHE = 'revision-cm2-' + VERSION;
 
 // Chemins relatifs : fonctionne à la racine comme dans /revision-cm2/ sur GitHub Pages.
@@ -18,6 +18,14 @@ const FICHIERS = [
   'icons/icon-maskable-512.png',
   'icons/apple-touch-icon.png'
 ];
+
+// Recopie une réponse marquée « redirigée » pour que Safari accepte de l'afficher.
+function nettoyer(reponse) {
+  if (!reponse || !reponse.redirected) return reponse;
+  return reponse.blob().then(function (corps) {
+    return new Response(corps, { status: 200, headers: reponse.headers });
+  });
+}
 
 self.addEventListener('install', function (event) {
   event.waitUntil(
@@ -54,12 +62,17 @@ self.addEventListener('fetch', function (event) {
     event.respondWith(
       fetch(requete)
         .then(function (reponse) {
-          const copie = reponse.clone();
-          caches.open(CACHE).then(function (cache) { cache.put('index.html', copie); });
+          // Safari refuse de servir une réponse redirigée : on ne garde que les réponses directes.
+          if (reponse.ok && !reponse.redirected) {
+            const copie = reponse.clone();
+            caches.open(CACHE).then(function (cache) { cache.put('index.html', copie); });
+          }
           return reponse;
         })
         .catch(function () {
-          return caches.match('index.html');
+          return caches.match('index.html', { ignoreSearch: true })
+            .then(function (enCache) { return enCache || caches.match('./', { ignoreSearch: true }); })
+            .then(nettoyer);
         })
     );
     return;
