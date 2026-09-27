@@ -2,9 +2,22 @@
 :root {
   --sable: #e9dcc3;
   --sable-clair: #f6efe2;
+  --blanc: #fffdf9;
   --encre: #2e2a24;
   --encre-douce: #5a5247;
   --vert: #3f6b3a;
+  --rouge: #9b2c1f;
+
+  /* Une couleur par discipline (toujours accompagnée du nom et d'une icône). */
+  --histoire: #9c4a2f;
+  --geographie: #2f6f8f;
+  --sciences: #3f6b3a;
+  --vocabulaire: #7a4f8a;
+  --grammaire: #8a6d1f;
+  --conjugaison: #a33b5c;
+  --calcul: #2d5a9a;
+  --geometrie: #1f6f66;
+  --mesures: #5c6b2f;
 }
 
 * { box-sizing: border-box; }
@@ -26,28 +39,157 @@ body {
 }
 
 .page {
-  max-width: 40rem;
+  max-width: 44rem;
   margin: 0 auto;
-  padding: 2rem 1rem;
+  padding: 1.5rem 1rem 3rem;
 }
 
-.logo { border-radius: 22%; display: block; }
+h1 { font-size: 1.9rem; line-height: 1.25; margin: 0.5rem 0 0.5rem; }
+h1:focus { outline: none; }
+h2 { font-size: 1.2rem; margin: 0 0 0.5rem; }
 
-h1 { font-size: 2rem; margin: 1rem 0 0.25rem; }
-h2 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+a { color: inherit; }
 
-.lead { color: var(--encre-douce); margin-top: 0; }
+.consigne { font-size: 1.25rem; margin: 0.5rem 0 1.25rem; }
 
-.etat, .aide {
-  background: #fff;
+.bandeau {
+  background: var(--blanc);
+  border: 2px dashed var(--sable);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+}
+
+/* Retour */
+.retour {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0.25rem 0;
+  color: var(--encre-douce);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* Mes paquets */
+.groupe { margin: 1.5rem 0; }
+
+.liste-paquets { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+
+@media (min-width: 700px) {
+  .liste-paquets { grid-template-columns: 1fr 1fr; }
+}
+
+.carte-paquet {
+  display: block;
+  min-height: 44px;
+  padding: 1rem 1.25rem;
+  background: var(--blanc);
+  border: 2px solid var(--sable);
+  border-left: 10px solid var(--couleur, var(--sable));
+  border-radius: 14px;
+  text-decoration: none;
+}
+.carte-paquet:active { background: var(--sable); }
+
+.carte-titre { display: block; font-size: 1.2rem; font-weight: 700; }
+.carte-infos { display: block; color: var(--encre-douce); font-size: 1rem; }
+
+[data-discipline="histoire"] { --couleur: var(--histoire); }
+[data-discipline="geographie"] { --couleur: var(--geographie); }
+[data-discipline="sciences"] { --couleur: var(--sciences); }
+[data-discipline="vocabulaire"] { --couleur: var(--vocabulaire); }
+[data-discipline="grammaire"] { --couleur: var(--grammaire); }
+[data-discipline="conjugaison"] { --couleur: var(--conjugaison); }
+[data-discipline="calcul"] { --couleur: var(--calcul); }
+[data-discipline="geometrie"] { --couleur: var(--geometrie); }
+[data-discipline="mesures"] { --couleur: var(--mesures); }
+
+/* Étiquettes */
+.etiquettes { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; padding: 0; }
+.etiquette {
+  background: var(--blanc);
+  border: 2px solid var(--sable);
+  border-radius: 999px;
+  padding: 0.15rem 0.75rem;
+  font-size: 0.95rem;
+}
+.etiquette.discipline { border-color: var(--couleur); }
+
+/* Écran paquet : trois gros boutons */
+.activites { display: grid; gap: 1rem; }
+@media (min-width: 700px) {
+  .activites { grid-template-columns: repeat(3, 1fr); }
+}
+
+.activite, .bouton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 88px;
+  padding: 1rem;
+  background: var(--blanc);
+  color: var(--encre);
+  border: 3px solid var(--vert);
+  border-radius: 16px;
+  font: inherit;
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.activite:active, .bouton:active { background: var(--sable); }
+
+.activite[disabled] {
+  border-style: dashed;
+  border-color: var(--sable);
+  color: var(--encre-douce);
+}
+.bientot { font-size: 0.9rem; font-weight: 400; }
+
+.bouton { min-height: 60px; margin-top: 1.5rem; }
+
+/* Fiche */
+.fiche { margin: 0; padding: 0; list-style: none; counter-reset: idee; }
+.fiche li {
+  counter-increment: idee;
+  position: relative;
+  background: var(--blanc);
   border: 2px solid var(--sable);
   border-radius: 12px;
-  padding: 1rem;
-  margin: 1.5rem 0;
+  padding: 0.9rem 1rem 0.9rem 3.25rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.25rem;
+  line-height: 1.6;
+}
+.fiche li::before {
+  content: counter(idee);
+  position: absolute;
+  left: 0.9rem;
+  top: 0.9rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--sable);
+  text-align: center;
+  font-weight: 700;
+  line-height: 1.75rem;
+  font-size: 1rem;
 }
 
-.etat p { margin: 0.25rem 0; }
+/* Erreurs */
+.erreurs {
+  background: var(--blanc);
+  border: 2px solid var(--rouge);
+  border-radius: 12px;
+  padding: 1rem;
+}
+.erreurs p { margin-top: 0; }
+.erreurs ul { margin: 0; padding-left: 1.25rem; }
+.erreurs li { margin-bottom: 0.4rem; }
+code { font-family: ui-monospace, Menlo, monospace; font-size: 0.95em; }
 
-.aide ol { margin: 0; padding-left: 1.5rem; }
+.alerte-discrete { font-size: 0.95rem; color: var(--rouge); }
+.alerte-discrete a { color: var(--rouge); }
 
-.version { color: var(--encre-douce); font-size: 0.9rem; }
+.version { margin-top: 2.5rem; color: var(--encre-douce); font-size: 0.9rem; }

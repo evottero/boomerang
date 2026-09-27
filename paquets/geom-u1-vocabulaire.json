@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "id": "geom-u1-vocabulaire",
+  "titre": "Géométrie : vocabulaire et notations",
+  "discipline": "geometrie",
+  "periode": "P1",
+  "niveau": "standard",
+  "relu": true,
+  "fiche": [
+    "Un **point** se marque avec une petite croix. On le nomme avec une lettre majuscule : A.",
+    "Une **droite** n'a pas de fin. Elle passe par A et B : on écrit **(AB)**.",
+    "Un **segment** a deux extrémités, A et B. On écrit **[AB]**.",
+    "Une **demi-droite** commence en A et passe par B, sans fin. On écrit **[AB)**.",
+    "La **longueur** du segment [AB] s'écrit **AB**, sans crochets.",
+    "Des petits **traits identiques** sur deux segments veulent dire : même longueur.",
+    "Un **petit carré** dans un angle veut dire : **angle droit**."
+  ],
+  "cartes": [
+    { "recto": "(AB)", "verso": "La droite qui passe par A et B" },
+    { "recto": "[AB]", "verso": "Le segment d'extrémités A et B" },
+    { "recto": "[AB)", "verso": "La demi-droite d'origine A qui passe par B" },
+    { "recto": "AB (sans crochets ni parenthèses)", "verso": "La longueur du segment [AB]" },
+    { "recto": "Comment marquer un point ?", "verso": "Avec une petite croix, la lettre au-dessus" },
+    { "recto": "Deux segments avec le même petit trait", "verso": "Ils ont la même longueur" },
+    { "recto": "Un petit carré dans un angle", "verso": "C'est un angle droit" },
+    { "recto": "Quelle figure n'a pas de fin, ni d'un côté ni de l'autre ?", "verso": "La droite" }
+  ],
+  "quiz": [
+    {
+      "type": "qcm",
+      "question": "Comment écrit-on le segment d'extrémités A et B ?",
+      "choix": ["(AB)", "[AB]", "[AB)"],
+      "reponse": 1,
+      "explication": "Le segment s'écrit avec deux crochets, parce qu'il a deux extrémités : [AB]."
+    },
+    {
+      "type": "qcm",
+      "question": "Que veut dire (AB) ?",
+      "choix": ["La droite qui passe par A et B", "La longueur de A à B", "Le segment de A à B"],
+      "reponse": 0,
+      "explication": "Les parenthèses indiquent une droite : elle n'a pas de fin."
+    },
+    {
+      "type": "qcm",
+      "question": "Comment écrit-on la demi-droite d'origine A qui passe par B ?",
+      "choix": ["[AB]", "(AB)", "[AB)"],
+      "reponse": 2,
+      "explication": "Le crochet est du côté de l'origine A. La parenthèse est du côté sans fin."
+    },
+    {
+      "type": "vraifaux",
+      "question": "On écrit la longueur du segment [AB] comme ceci : [AB].",
+      "reponse": false,
+      "explication": "La longueur s'écrit AB, sans crochets. [AB] désigne le segment lui-même."
+    },
+    {
+      "type": "vraifaux",
+      "question": "Un petit carré dans un angle veut dire que l'angle est droit.",
+      "reponse": true,
+      "explication": "Le petit carré est le codage de l'angle droit."
+    },
+    {
+      "type": "trous",
+      "texte": "Deux segments marqués du même petit trait ont la même ___.",
+      "reponse": "longueur",
+      "explication": "Les traits identiques sont le codage des longueurs égales."
+    },
+    {
+      "type": "vraifaux",
+      "question": "Un point se marque avec un gros rond plein.",
+      "reponse": false,
+      "explication": "Un point se marque avec une petite croix. La lettre se place au-dessus."
+    }
+  ]
+}

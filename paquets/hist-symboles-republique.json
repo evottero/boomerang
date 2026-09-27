@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "id": "hist-symboles-republique",
+  "titre": "Les symboles de la République",
+  "discipline": "histoire",
+  "periode": "P1",
+  "niveau": "standard",
+  "relu": true,
+  "fiche": [
+    "Le **drapeau tricolore** a trois couleurs : bleu, blanc, rouge. Il date de **1794**.",
+    "Le blanc représentait le roi. Le bleu et le rouge étaient les couleurs de **Paris**.",
+    "**Marianne** est la femme qui représente la République. Son buste est dans les mairies.",
+    "Marianne porte le **bonnet phrygien**, un bonnet rouge qui date de la Révolution.",
+    "La **Fête nationale** a lieu chaque **14 juillet**, depuis **1880**.",
+    "La devise de la République est **Liberté, Égalité, Fraternité**.",
+    "**La Marseillaise** est l'hymne national. Au départ, c'était un chant de guerre.",
+    "Le **coq** est l'animal emblème de la France. En latin, *gallus* veut dire coq."
+  ],
+  "cartes": [
+    { "recto": "Les trois couleurs du drapeau", "verso": "Bleu, blanc, rouge" },
+    { "recto": "Date du drapeau tricolore", "verso": "1794" },
+    { "recto": "Marianne", "verso": "La femme qui représente la République" },
+    { "recto": "Le bonnet phrygien", "verso": "Le bonnet rouge de Marianne, qui date de la Révolution" },
+    { "recto": "La date de la Fête nationale", "verso": "Le 14 juillet" },
+    { "recto": "La devise de la République", "verso": "Liberté, Égalité, Fraternité" },
+    { "recto": "L'hymne national", "verso": "La Marseillaise" },
+    { "recto": "Qui a composé La Marseillaise ?", "verso": "Rouget de Lisle, un soldat" },
+    { "recto": "L'animal emblème de la France", "verso": "Le coq" }
+  ],
+  "quiz": [
+    {
+      "type": "qcm",
+      "question": "Qui représente la République ?",
+      "choix": ["Jeanne d'Arc", "Marianne", "La reine"],
+      "reponse": 1,
+      "explication": "Marianne est la femme symbole de la République. Son buste est dans les mairies."
+    },
+    {
+      "type": "qcm",
+      "question": "Quand a lieu la Fête nationale ?",
+      "choix": ["Le 1er janvier", "Le 11 novembre", "Le 14 juillet"],
+      "reponse": 2,
+      "explication": "La Fête nationale a lieu le 14 juillet, depuis 1880."
+    },
+    {
+      "type": "vraifaux",
+      "question": "Le blanc du drapeau représentait la ville de Paris.",
+      "reponse": false,
+      "explication": "Le blanc représentait le roi. Le bleu et le rouge étaient les couleurs de Paris."
+    },
+    {
+      "type": "vraifaux",
+      "question": "La Marseillaise était au départ un chant de guerre.",
+      "reponse": true,
+      "explication": "Elle a été composée par un soldat, Rouget de Lisle, pendant une guerre."
+    },
+    {
+      "type": "trous",
+      "texte": "La devise de la République est Liberté, ___, Fraternité.",
+      "reponse": "Égalité",
+      "explication": "La devise dit que nous sommes libres, égaux, et que nous devons nous entraider."
+    },
+    {
+      "type": "qcm",
+      "question": "Quel bonnet porte Marianne ?",
+      "choix": ["Le bonnet phrygien", "Le bonnet d'âne", "La couronne"],
+      "reponse": 0,
+      "explication": "Le bonnet phrygien est un bonnet rouge qui date de la Révolution."
+    },
+    {
+      "type": "trous",
+      "texte": "L'animal emblème de la France est le ___.",
+      "reponse": "coq",
+      "explication": "En latin, gallus veut dire coq. On le voit sur les girouettes des églises."
+    },
+    {
+      "type": "ordre",
+      "question": "Range ces dates de la plus ancienne à la plus récente.",
+      "elements": ["1789 : prise de la Bastille", "1794 : le drapeau tricolore", "1880 : première Fête nationale le 14 juillet"],
+      "explication": "1789 vient d'abord, puis 1794, puis 1880."
+    }
+  ]
+}

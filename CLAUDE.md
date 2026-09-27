@@ -136,36 +136,78 @@ Ludification sobre : une plante qui pousse au fil des séances, par avatar. Pas 
 
 ## 10. Format de données des paquets
 
-Un paquet est un fichier JSON unique. L'app refuse tout fichier non conforme et dit pourquoi.
+Un paquet est un fichier JSON unique, rangé dans `paquets/` sous le nom `<id>.json` et déclaré dans `paquets/index.json`. L'app refuse tout fichier non conforme et dit pourquoi. Le validateur de référence est `validation.js`. Les paquets `paquets/hist-symboles-republique.json` et `paquets/geom-u1-vocabulaire.json` sont les exemples qui font foi.
 
 ```json
 {
   "version": 1,
-  "id": "hist-p2-revolution",
-  "titre": "La Révolution française",
+  "id": "hist-symboles-republique",
+  "titre": "Les symboles de la République",
   "discipline": "histoire",
-  "periode": "P2",
+  "periode": "P1",
   "niveau": "standard",
   "relu": true,
   "fiche": [
-    "En **1789**, les députés réunis à Versailles forment l'Assemblée nationale."
+    "La devise de la République est **Liberté, Égalité, Fraternité**."
   ],
   "cartes": [
-    { "recto": "14 juillet 1789", "verso": "Prise de la Bastille" }
+    { "recto": "L'hymne national", "verso": "La Marseillaise" }
   ],
   "quiz": [
     {
       "type": "qcm",
-      "question": "Quel roi règne en 1789 ?",
-      "choix": ["Louis XIV", "Louis XVI", "Napoléon"],
+      "question": "Qui représente la République ?",
+      "choix": ["Jeanne d'Arc", "Marianne", "La reine"],
       "reponse": 1,
-      "explication": "Louis XVI est roi de France de 1774 à 1792."
+      "explication": "Marianne est la femme symbole de la République."
+    },
+    {
+      "type": "vraifaux",
+      "question": "La Marseillaise était au départ un chant de guerre.",
+      "reponse": true,
+      "explication": "Elle a été composée par un soldat, Rouget de Lisle, pendant une guerre."
+    },
+    {
+      "type": "trous",
+      "texte": "La devise de la République est Liberté, ___, Fraternité.",
+      "reponse": "Égalité",
+      "explication": "La devise dit que nous sommes libres, égaux, et que nous devons nous entraider."
+    },
+    {
+      "type": "ordre",
+      "question": "Range ces dates de la plus ancienne à la plus récente.",
+      "elements": ["1789 : prise de la Bastille", "1794 : le drapeau tricolore", "1880 : première Fête nationale le 14 juillet"],
+      "explication": "1789 vient d'abord, puis 1794, puis 1880."
     }
   ]
 }
 ```
 
-Types de quiz acceptés : `qcm`, `vraifaux`, `trous`, `ordre`. Aucun champ ne contient de donnée d'élève. Le projet fournit aussi le prompt de génération à coller dans Claude avec la leçon (phrases courtes, vocabulaire de la leçon, pas de piège).
+Champs du paquet (tous obligatoires, aucun autre accepté) :
+
+| Champ | Règle |
+| --- | --- |
+| `version` | 1 |
+| `id` | Minuscules sans accent, chiffres, tirets. Identique au nom du fichier |
+| `titre` | Texte, 80 caractères maximum |
+| `discipline` | `histoire`, `geographie`, `sciences`, `vocabulaire`, `grammaire`, `conjugaison`, `calcul`, `geometrie`, `mesures` |
+| `periode` | `P1` à `P10` |
+| `niveau` | `accompagné`, `standard`, `approfondi` |
+| `relu` | Doit valoir `true`. Un paquet non relu est refusé par l'app |
+| `fiche` | 5 à 8 idées clés. `**mot**` en gras, `*mot*` en italique |
+| `cartes` | Au moins une carte `{ "recto": …, "verso": … }` |
+| `quiz` | Au moins une question, d'un des 4 types ci-dessous |
+
+Types de quiz (chacun a une `explication`, affichée après la réponse) :
+
+| Type | Champs | Règle |
+| --- | --- | --- |
+| `qcm` | `question`, `choix`, `reponse` | 3 choix différents. `reponse` : position de la bonne réponse, 0, 1 ou 2 |
+| `vraifaux` | `question`, `reponse` | `question` est une affirmation. `reponse` : `true` ou `false`, sans guillemets |
+| `trous` | `texte`, `reponse` | `texte` contient une seule fois `___` (trois tirets bas). `reponse` : le mot manquant. Pas de champ `question` |
+| `ordre` | `question`, `elements` | 3 à 6 éléments différents, écrits dans le bon ordre. L'app les mélange |
+
+Aucun champ ne contient de donnée d'élève : tout champ inconnu fait refuser le paquet. Le projet fournit aussi le prompt de génération à coller dans Claude avec la leçon (phrases courtes, vocabulaire de la leçon, pas de piège).
 
 ## 11. Écrans
 
