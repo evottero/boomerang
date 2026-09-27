@@ -13,7 +13,7 @@ const css = fs.readFileSync(path.join(racine, 'styles.css'), 'utf8');
 
 // ---------- Consignes ----------
 
-const VERBES = ['Choisis', 'Touche', 'Crée', 'Lis', 'Trouve', 'Dis', 'Écris', 'Montre', 'Connecte-toi', 'Reviens', 'Ouvre'];
+const VERBES = ['Choisis', 'Touche', 'Crée', 'Lis', 'Trouve', 'Dis', 'Écris', 'Montre', 'Connecte-toi', 'Reviens', 'Ouvre', 'Tape'];
 
 function consignes() {
   const liste = [];

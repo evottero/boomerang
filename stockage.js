@@ -1,7 +1,8 @@
 /*
- * Stockage local IndexedDB (règle 2 : rien ne quitte l'appareil).
+ * Stockage local IndexedDB : la référence (règle 2). Le serveur de synchronisation n'en est qu'une copie.
  *
- * avatars  : { id: 'renard-bleu', animal, couleur, cree, seances, reglages }
+ * avatars  : { id: 'renard-bleu', animal, couleur, cree, seances, reglages,
+ *              classe, sel, empreinteLocale, essaisFaux, bloqueJusqua }  (champs de classe : lot 5 bis)
  * cartes   : { avatar, paquet, cle, boite, echeance, vues, derniere }  clé [avatar, paquet, cle]
  * reglages : { cle, valeur }  (code de l'atelier, décalage de date de test)
  */
@@ -120,6 +121,31 @@
     });
   }
 
+  // Toutes les cartes d'un avatar, tous paquets confondus (synchronisation).
+  function cartesAvatar(avatar) {
+    return transaction(['cartes'], 'readonly', function (m) {
+      return requete(m.cartes.index('avatar').getAll(avatar));
+    });
+  }
+
+  function enregistrerCartes(avatar, liste) {
+    if (!liste.length) return Promise.resolve();
+    return transaction(['cartes'], 'readwrite', function (m) {
+      return Promise.all(liste.map(function (c) {
+        return requete(m.cartes.put({ avatar: avatar, paquet: c.paquet, cle: c.cle, boite: c.boite, echeance: c.echeance, vues: c.vues, derniere: c.derniere }));
+      }));
+    });
+  }
+
+  // Efface un avatar et toute sa progression sur cet appareil.
+  function effacerAvatarLocal(avatar) {
+    return transaction(['avatars', 'cartes'], 'readwrite', function (m) {
+      return requete(m.cartes.index('avatar').getAllKeys(avatar)).then(function (cles) {
+        return Promise.all(cles.map(function (k) { return requete(m.cartes.delete(k)); }));
+      }).then(function () { return requete(m.avatars.delete(avatar)); });
+    });
+  }
+
   // ---------- Réglages ----------
 
   function lireReglage(cle, parDefaut) {
@@ -157,6 +183,9 @@
     compterSeance: compterSeance,
     etatsCartes: etatsCartes,
     enregistrerCarte: enregistrerCarte,
+    cartesAvatar: cartesAvatar,
+    enregistrerCartes: enregistrerCartes,
+    effacerAvatarLocal: effacerAvatarLocal,
     lireReglage: lireReglage,
     ecrireReglage: ecrireReglage,
     toutEffacer: toutEffacer,

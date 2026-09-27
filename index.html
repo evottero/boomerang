@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <!-- Règle 3 : aucune ressource hors du site. Le navigateur bloque tout autre domaine. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <!-- Règles 3 et 5 : aucune ressource hors du site ; seule la fonction de synchronisation (Supabase) est joignable. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.supabase.co; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <title>Révision CM2</title>
   <meta name="description" content="Réviser ses leçons de CM2 avec des fiches, des cartes et des quiz. Aucune donnée ne quitte l'appareil.">
@@ -34,6 +34,7 @@
   <script src="quiz.js"></script>
   <script src="voix.js"></script>
   <script src="qrcode.js"></script>
+  <script src="synchro.js"></script>
   <script src="atelier.js"></script>
   <script src="app.js"></script>
 </body>

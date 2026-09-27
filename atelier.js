@@ -305,10 +305,14 @@ Leçon :
           });
           html += '</ul>';
         }
-        html += '</section>' + blocDateTest() +
+        html += '</section>' +
+          '<section class="bloc" id="bloc-classe"><h2>Classe et synchronisation</h2><p>Chargement…</p></section>' +
+          blocDateTest() +
           '<section class="bloc"><h2>Données de l\'appareil</h2>' +
-          '<p>Efface tous les avatars, toute la progression, le code de l\'atelier, la date de test et le brouillon.</p>' +
-          '<button class="bouton danger" type="button" id="effacer">Effacer toutes les données</button></section>' +
+          '<p>Efface de cet appareil : avatars, progression, code de l\'atelier, clé enseignant, code de classe, date de test et brouillon.</p>' +
+          (c.SY.active() ? '<p class="note-discrete">La progression enregistrée sur le serveur est conservée : chaque élève la retrouve avec son code. ' +
+            'Pour effacer aussi le serveur, utilise « Effacer ses données » dans la liste des avatars de la classe.</p>' : '') +
+          '<button class="bouton danger" type="button" id="effacer">Effacer les données de cet appareil</button></section>' +
           '<button class="bouton secondaire" type="button" id="fermer">Fermer l\'atelier</button>';
         c.afficher(html, 'Atelier');
 
@@ -320,8 +324,9 @@ Leçon :
           });
         }
         brancherDateTest(function () { ecranAccueil(encoreActuel); });
+        remplirBlocClasse(encoreActuel);
         document.getElementById('effacer').addEventListener('click', function () {
-          if (!window.confirm('Effacer tous les avatars et toute la progression de cet appareil ? C\'est définitif.')) return;
+          if (!window.confirm('Effacer tous les avatars et toute la progression de cet appareil ? C\'est définitif sur cet appareil.')) return;
           c.S.toutEffacer().catch(function () {}).then(function () {
             brouillon = null;
             ouvert = false;
@@ -332,6 +337,141 @@ Leçon :
         document.getElementById('fermer').addEventListener('click', function () {
           ouvert = false;
           location.hash = '#/';
+        });
+      });
+    }
+
+    // ---------- Classe et synchronisation (lot 5 bis) ----------
+
+    function remplirBlocClasse(encoreActuel) {
+      const bloc = document.getElementById('bloc-classe');
+      if (!bloc) return;
+      if (!c.SY.active()) {
+        bloc.innerHTML = '<h2>Classe et synchronisation</h2><p>Synchronisation non configurée : l\'adresse de la fonction est vide dans synchro.js.</p>';
+        return;
+      }
+      c.S.lireReglage('cleEnseignant', null).then(function (cle) {
+        if (!encoreActuel()) return;
+        const classe = c.getClasse();
+        let html = '<h2>Classe et synchronisation</h2>' +
+          '<p>Code de la classe sur cet appareil : ' + (classe ? '<strong class="code-affiche">' + classe + '</strong>' : '<strong>aucun</strong>') + '</p>';
+        if (!cle) {
+          html += '<p>Pour gérer la classe, tape la clé enseignant définie dans Supabase.</p>' +
+            '<label class="champ" for="cle-ens">Clé enseignant</label>' +
+            '<input id="cle-ens" class="saisie" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+            '<p class="message" id="message-cle" role="alert"></p>' +
+            '<button class="bouton" type="button" id="enregistrer-cle">Enregistrer la clé</button>';
+        } else {
+          html += '<div class="boutons-ligne">' +
+            '<button class="bouton" type="button" id="nouvelle-classe">Créer une nouvelle classe</button>' +
+            '<button class="bouton secondaire" type="button" id="autre-classe">Utiliser un autre code de classe</button></div>' +
+            '<p class="message-ok" id="message-classe" role="status"></p>' +
+            '<h3>Avatars de la classe</h3><div id="liste-classe"><p>' + (classe ? 'Chargement…' : 'Aucune classe sur cet appareil.') + '</p></div>' +
+            '<button class="lien bouton-lien" type="button" id="oublier-cle">Oublier la clé enseignant sur cet appareil</button>';
+        }
+        bloc.innerHTML = html;
+        const refaire = function () { remplirBlocClasse(encoreActuel); };
+
+        if (!cle) {
+          document.getElementById('enregistrer-cle').addEventListener('click', function () {
+            const valeur = document.getElementById('cle-ens').value.trim();
+            const message = document.getElementById('message-cle');
+            if (valeur.length < 12) { message.textContent = 'La clé fait au moins 12 caractères.'; return; }
+            const verification = classe
+              ? c.SY.appeler('admin-liste', { classe: classe, cle: valeur })
+              : Promise.resolve({ statut: 200 });
+            verification.then(function (r) {
+              if (r.statut === 403) { message.textContent = 'Clé enseignant refusée.'; return; }
+              if (r.statut === 0) { message.textContent = 'Connecte-toi à Internet, puis réessaie.'; return; }
+              c.S.ecrireReglage('cleEnseignant', valeur).then(refaire);
+            });
+          });
+          return;
+        }
+
+        const messageClasse = document.getElementById('message-classe');
+        document.getElementById('nouvelle-classe').addEventListener('click', function () {
+          if (!window.confirm('Créer une nouvelle classe ? Cet appareil passera sur le nouveau code.')) return;
+          let essais = 0;
+          (function essayer() {
+            const code = c.SY.nouveauCodeClasse();
+            c.SY.appeler('admin-creer-classe', { classe: code, cle: cle }).then(function (r) {
+              if (r.statut === 409 && ++essais < 3) { essayer(); return; }
+              if (r.statut === 200) {
+                c.setClasse(code).then(function () {
+                  refaire();
+                  setTimeout(function () {
+                    const m = document.getElementById('message-classe');
+                    if (m) m.textContent = '✓ Nouvelle classe : ' + code + '. Donne ce code aux élèves.';
+                  }, 300);
+                });
+              } else {
+                messageClasse.textContent = r.statut === 403 ? 'Clé enseignant refusée.' :
+                  r.statut === 0 ? 'Connecte-toi à Internet, puis réessaie.' : 'Création impossible. Réessaie.';
+              }
+            });
+          })();
+        });
+        document.getElementById('autre-classe').addEventListener('click', function () {
+          if (!window.confirm('Oublier le code de la classe sur cet appareil ? Il sera demandé à la prochaine ouverture.')) return;
+          c.oublierClasse().then(refaire);
+        });
+        document.getElementById('oublier-cle').addEventListener('click', function () {
+          c.S.ecrireReglage('cleEnseignant', null).then(refaire);
+        });
+        if (classe) listerClasse(classe, cle, encoreActuel, refaire);
+      });
+    }
+
+    function listerClasse(classe, cle, encoreActuel, refaire) {
+      c.SY.appeler('admin-liste', { classe: classe, cle: cle }).then(function (r) {
+        if (!encoreActuel()) return;
+        const zone = document.getElementById('liste-classe');
+        if (!zone) return;
+        if (r.statut === 0) { zone.innerHTML = '<p>Liste indisponible sans réseau.</p>'; return; }
+        if (r.statut === 403) { zone.innerHTML = '<p>Clé enseignant refusée. Oublie-la puis tape la bonne.</p>'; return; }
+        if (r.statut === 404) { zone.innerHTML = '<p>Ce code de classe n\'existe plus sur le serveur (effacement du 31 août ?).</p>'; return; }
+        if (r.statut !== 200) { zone.innerHTML = '<p>Liste indisponible.</p>'; return; }
+        if (!r.corps.avatars.length) { zone.innerHTML = '<p>Aucun avatar dans cette classe pour l\'instant.</p>'; return; }
+        let html = '<ul class="paquets-atelier">';
+        r.corps.avatars.forEach(function (a) {
+          const etat = a.bloque ? ' <small>(bloqué une heure)</small>' : (a.sansCode ? ' <small>(code à choisir)</small>' : '');
+          const nom = echapper(c.nomAvatarId(a.avatar));
+          html += '<li><span class="paquet-nom">' + nom + etat + '</span><span class="paquet-actions">' +
+            '<button class="lien bouton-lien" type="button" data-reinit="' + a.avatar + '" aria-label="Réinitialiser le code de ' + nom + '">Réinitialiser le code</button>' +
+            '<button class="lien bouton-lien" type="button" data-effacer="' + a.avatar + '" aria-label="Effacer les données de ' + nom + '">Effacer ses données</button>' +
+            '</span></li>';
+        });
+        zone.innerHTML = html + '</ul>';
+
+        zone.querySelectorAll('[data-reinit]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            const id = b.dataset.reinit;
+            if (!window.confirm('Réinitialiser le code de ' + c.nomAvatarId(id) + ' ? Sa progression est conservée ; il choisira un nouveau code.')) return;
+            c.SY.appeler('admin-reinitialiser', { classe: classe, avatar: id, cle: cle }).then(function (rep) {
+              if (rep.statut !== 200) { window.alert('Réinitialisation impossible. Vérifie la connexion.'); return; }
+              // Sur cet appareil aussi, l'ancien code ne doit plus ouvrir l'avatar.
+              c.S.lireAvatar(id).then(function (local) {
+                if (!local || local.classe !== classe) return;
+                local.empreinteLocale = null;
+                local.essaisFaux = 0;
+                local.bloqueJusqua = null;
+                return c.S.enregistrerAvatar(local);
+              }).then(refaire);
+            });
+          });
+        });
+        zone.querySelectorAll('[data-effacer]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            const id = b.dataset.effacer;
+            if (!window.confirm('Effacer toutes les données de ' + c.nomAvatarId(id) + ', sur cet appareil et sur le serveur ? C\'est définitif.')) return;
+            c.SY.appeler('admin-effacer', { classe: classe, avatar: id, cle: cle }).then(function (rep) {
+              if (rep.statut !== 200) { window.alert('Effacement impossible. Vérifie la connexion.'); return; }
+              c.S.lireAvatar(id).then(function (local) {
+                if (local && local.classe === classe) return c.S.effacerAvatarLocal(id);
+              }).then(refaire);
+            });
+          });
         });
       });
     }

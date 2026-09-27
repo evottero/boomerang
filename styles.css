@@ -769,3 +769,45 @@ textarea#prompt, textarea#json { font-family: ui-monospace, Menlo, monospace; fo
   .impression { margin: 0; }
   @page { margin: 12mm; }
 }
+
+/* ---------- Lot 5 bis : code de classe, clavier du code secret ---------- */
+
+.code-classe {
+  width: 100%;
+  max-width: 16rem;
+  min-height: 64px;
+  padding: 0.4rem 0.8rem;
+  border: 3px solid var(--cafe);
+  border-radius: 12px;
+  background: var(--blanc);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+.code-affiche { font-size: 1.4rem; letter-spacing: 0.15em; }
+
+.points { display: flex; gap: 1rem; margin: 0.5rem 0 0.25rem; min-height: 32px; }
+.point { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--encre); background: transparent; }
+.point.plein { background: var(--encre); }
+
+.clavier {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  max-width: 22rem;
+  margin-top: 0.75rem;
+}
+.touche {
+  min-height: 72px;
+  background: var(--blanc);
+  border: 3px solid var(--ambre);
+  border-radius: 16px;
+  font-size: 2.2rem;
+  font-weight: 700;
+}
+.touche:active { background: var(--ambre-pale); }
+.touche[disabled] { border-style: dashed; border-color: var(--sable); color: var(--cafe); }
+/* Le 0 sous le 8, l'effacement sous le 7 */
+.touche-effacer { grid-column: 1; grid-row: 4; font-size: 1.8rem; }
+.clavier [data-chiffre="0"] { grid-column: 2; grid-row: 4; }

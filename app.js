@@ -12,8 +12,9 @@
   const S = window.Stockage;
   const Q = window.Quiz;
   const VX = window.Voix;
+  const SY = window.Synchro;
   const app = document.getElementById('app');
-  const VERSION_APP = '0.5.1';
+  const VERSION_APP = '0.6.1';
 
   const DISCIPLINES = {
     histoire: { nom: 'Histoire', icone: '🏰' },
@@ -83,6 +84,9 @@
   let stockageOk = true;        // faux en navigation privée ou si IndexedDB est bloqué
   let decalageJours = 0;        // date de test, réglée dans l'atelier
   let apresAvatar = null;       // écran à rouvrir une fois l'avatar choisi
+  let classeAppareil = null;    // code de la classe, saisi une fois par appareil (lot 5 bis)
+  let sansClasse = false;       // l'appareil est utilisé sans synchronisation
+  let codeCourant = null;       // code élève de l'avatar ouvert, gardé en mémoire seulement
 
   // Réglages d'affichage et de voix, propres à chaque avatar (iPad partagé).
   const REGLAGES_DEFAUT = { police: 'luciole', taille: 1, vitesse: 'normale', voix: null };
@@ -288,6 +292,136 @@
 
   // ---------- Avatars ----------
 
+  // Synchronisation active pour cet appareil ?
+  function avecClasse() {
+    return SY.active() && stockageOk && !!classeAppareil;
+  }
+
+  function ouvrirAvatar(a, code) {
+    memoriserAvatar(a);
+    codeCourant = code || null;
+    synchroniser();
+    const cible = apresAvatar || '#/paquets';
+    apresAvatar = null;
+    location.hash = cible;
+  }
+
+  // ---------- Synchronisation (IndexedDB reste la référence) ----------
+
+  let synchroEnCours = false;
+
+  function synchroniser() {
+    const a = avatarCourant;
+    if (!SY.active() || !a || !a.classe || !codeCourant || synchroEnCours) return Promise.resolve();
+    synchroEnCours = true;
+    return S.cartesAvatar(a.id).then(function (locales) {
+      const envoi = locales.map(function (c) {
+        return { paquet: c.paquet, cle: c.cle, boite: c.boite, echeance: c.echeance, vues: c.vues, derniere: c.derniere };
+      });
+      const seances = a.seances || 0;
+      return SY.appeler('synchroniser', { classe: a.classe, avatar: a.id, code: codeCourant, seances: seances, cartes: envoi }).then(function (r) {
+        if (r.statut === 200 && Array.isArray(r.corps.cartes)) {
+          return S.enregistrerCartes(a.id, SY.aMettreAJour(locales, r.corps.cartes)).then(function () {
+            // Plante : le plus grand nombre de séances l'emporte.
+            if (Number.isInteger(r.corps.seances) && r.corps.seances > seances) {
+              a.seances = r.corps.seances;
+              return S.enregistrerAvatar(a);
+            }
+          });
+        }
+        if ((r.statut === 409 && r.corps.erreur === 'nouveauCode') || r.statut === 401) {
+          // Code remis à zéro, ou changé sur un autre appareil : cet appareil oublie son code périmé.
+          // À la prochaine ouverture, le code sera vérifié par le serveur (ou un nouveau sera demandé).
+          a.empreinteLocale = null;
+          codeCourant = null;
+          return S.enregistrerAvatar(a);
+        }
+      });
+    }).catch(function () {}).then(function () { synchroEnCours = false; });
+  }
+
+  window.addEventListener('online', function () { synchroniser(); });
+
+  // ---------- Code de la classe ----------
+
+  function ecranClasse() {
+    afficher(
+      '<h1>Code de la classe</h1>' +
+      '<p class="consigne">Tape le code de la classe donné par ton enseignant.</p>' +
+      '<input id="code-classe" class="code-classe" type="text" maxlength="8" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="Code de la classe">' +
+      '<p class="message" id="message" role="alert"></p>' +
+      '<button class="bouton" type="button" id="valider">Valider</button>' +
+      '<p><a class="lien" href="#/reglages"><span aria-hidden="true">⚙️</span> Réglages</a></p>' +
+      piedDePage(),
+      'Code de la classe'
+    );
+    const champ = document.getElementById('code-classe');
+    const message = document.getElementById('message');
+    function valider() {
+      const code = SY.normaliserClasse(champ.value);
+      if (!SY.classeValide(code)) { message.textContent = 'Le code a 6 lettres ou chiffres.'; return; }
+      message.textContent = 'Vérification…';
+      SY.appeler('classe', { classe: code }).then(function (r) {
+        if (r.statut === 200) {
+          classeAppareil = code;
+          sansClasse = false;
+          S.ecrireReglage('classe', code).then(function () { return S.ecrireReglage('sansClasse', false); })
+            .then(function () { location.hash = '#/avatars'; router(); });
+        } else if (r.statut === 0) {
+          message.textContent = 'Connecte-toi à Internet, puis réessaie.';
+        } else if (r.statut === 404) {
+          message.textContent = 'Ce code n\'existe pas. Vérifie-le avec ton enseignant.';
+        } else {
+          message.textContent = 'Le code a 6 lettres ou chiffres.';
+        }
+      });
+    }
+    document.getElementById('valider').addEventListener('click', valider);
+    champ.addEventListener('keydown', function (e) { if (e.key === 'Enter') valider(); });
+  }
+
+  // Bloc « Classe » des Réglages : utiliser l'appareil sans classe, ou entrer un code.
+  function blocAppareil() {
+    if (!SY.active() || !stockageOk) return '';
+    let html = '<section class="bloc" id="bloc-appareil"><h2>Classe</h2>';
+    if (classeAppareil) {
+      html += '<p>Code de la classe : <strong class="code-affiche">' + classeAppareil + '</strong></p>' +
+        '<p class="info">Sans code de classe, ta progression ne te suivra pas sur les autres appareils.</p>' +
+        '<button class="bouton secondaire" type="button" id="sans-classe">Utiliser sans classe</button>';
+    } else {
+      html += '<p class="info">' + (sansClasse
+        ? 'Cet appareil est utilisé sans classe. Sans code de classe, ta progression ne te suivra pas sur les autres appareils.'
+        : 'Aucun code de classe sur cet appareil.') + '</p>' +
+        '<button class="bouton secondaire" type="button" id="entrer-classe">Entrer un code de classe</button>';
+    }
+    return html + '</section>';
+  }
+
+  function brancherAppareil(reafficher) {
+    const sans = document.getElementById('sans-classe');
+    if (sans) {
+      sans.addEventListener('click', function () {
+        classeAppareil = null;
+        sansClasse = true;
+        S.ecrireReglage('classe', null)
+          .then(function () { return S.ecrireReglage('sansClasse', true); })
+          .then(reafficher);
+      });
+    }
+    const entrer = document.getElementById('entrer-classe');
+    if (entrer) {
+      entrer.addEventListener('click', function () {
+        sansClasse = false;
+        S.ecrireReglage('sansClasse', false).then(function () {
+          location.hash = '#/avatars';
+          router();
+        });
+      });
+    }
+  }
+
+  // ---------- Avatars ----------
+
   function ecranAvatars(encoreActuel) {
     if (!stockageOk) {
       afficher(
@@ -300,6 +434,7 @@
       );
       return;
     }
+    if (SY.active() && !classeAppareil && !sansClasse) { ecranClasse(); return; }
     S.listerAvatars().then(function (avatars) {
       if (!encoreActuel()) return;
       let html = '<h1>Qui es-tu ?</h1>';
@@ -326,10 +461,9 @@
       app.querySelectorAll('.avatar').forEach(function (bouton) {
         bouton.addEventListener('click', function () {
           const a = avatars.find(function (x) { return x.id === bouton.dataset.id; });
-          memoriserAvatar(a);
-          const cible = apresAvatar || '#/paquets';
-          apresAvatar = null;
-          location.hash = cible;
+          // Avatar de classe : code secret à chaque ouverture. Avatar local : ouverture directe.
+          if (a.classe && SY.active()) ecranCode(a, 'ouvrir');
+          else ouvrirAvatar(a, null);
         });
       });
     }).catch(function () {
@@ -339,10 +473,31 @@
   }
 
   function ecranNouvelAvatar(encoreActuel) {
-    S.listerAvatars().then(function (avatars) {
+    if (SY.active() && stockageOk && !classeAppareil && !sansClasse) { ecranClasse(); return; }
+    const classe = avecClasse() ? classeAppareil : null;
+    Promise.all([
+      S.listerAvatars(),
+      classe ? SY.appeler('classe', { classe: classe }) : Promise.resolve(null)
+    ]).then(function (r) {
       if (!encoreActuel()) return;
+      const avatars = r[0];
+      const reponse = r[1];
+      if (reponse && reponse.statut !== 200) {
+        const hors = reponse.statut === 0;
+        afficher(
+          lienRetour('#/avatars', 'Retour') + '<h1>Nouvel avatar</h1>' +
+          '<p class="consigne">' + (hors
+            ? 'Connecte-toi à Internet pour créer ton avatar.'
+            : 'Montre cet écran à ton enseignant.') + '</p>' +
+          (hors ? '' : '<p class="info">Le code de la classe n\'existe plus sur le serveur.</p>'),
+          'Nouvel avatar'
+        );
+        return;
+      }
       const pris = {};
       avatars.forEach(function (a) { pris[a.id] = true; });
+      const prisClasse = {};
+      if (reponse) reponse.corps.avatars.forEach(function (id) { prisClasse[id] = true; });
       const nbCouleurs = Object.keys(COULEURS).length;
 
       function choixAnimal() {
@@ -366,24 +521,32 @@
         let html = '<button class="retour" type="button" id="changer-animal"><span aria-hidden="true">←</span> Changer d\'animal</button>' +
           '<h1>Nouvel avatar</h1><p class="consigne">Choisis une couleur.</p><ul class="avatars">';
         Object.keys(COULEURS).forEach(function (couleur) {
+          const id = animal + '-' + couleur;
           const a = { animal: animal, couleur: couleur };
-          const dejaPris = pris[animal + '-' + couleur];
-          html += '<li><button class="avatar" type="button" data-couleur="' + couleur + '"' + (dejaPris ? ' disabled' : '') + '>' +
+          const ici = pris[id];
+          const ailleurs = !ici && prisClasse[id];
+          html += '<li><button class="avatar" type="button" data-couleur="' + couleur + '"' + (ici ? ' disabled' : '') + '>' +
             '<span class="avatar-icone" aria-hidden="true">' + ANIMAUX[animal].icone + '</span>' +
-            '<span class="avatar-nom">' + nomAvatar(a) + (dejaPris ? ' <small>(déjà pris)</small>' : '') + '</span></button></li>';
+            '<span class="avatar-nom">' + nomAvatar(a) +
+            (ici ? ' <small>(déjà pris)</small>' : '') +
+            (ailleurs ? ' <small>(déjà pris) C\'est le tien ?</small>' : '') +
+            '</span></button></li>';
         });
         html += '</ul>';
         afficher(html, 'Nouvel avatar');
         document.getElementById('changer-animal').addEventListener('click', choixAnimal);
         app.querySelectorAll('[data-couleur]').forEach(function (b) {
           b.addEventListener('click', function () {
-            const avatar = { id: animal + '-' + b.dataset.couleur, animal: animal, couleur: b.dataset.couleur, cree: Date.now(), seances: 0 };
+            const couleur = b.dataset.couleur;
+            const avatar = { id: animal + '-' + couleur, animal: animal, couleur: couleur, cree: Date.now(), seances: 0 };
+            if (classe) {
+              avatar.classe = classe;
+              ecranCode(avatar, prisClasse[avatar.id] ? 'retrouver' : 'creer');
+              return;
+            }
             S.ajouterAvatar(avatar).then(function () {
               S.demanderPersistance();
-              memoriserAvatar(avatar);
-              const cible = apresAvatar || '#/paquets';
-              apresAvatar = null;
-              location.hash = cible;
+              ouvrirAvatar(avatar, null);
             }).catch(function () {
               // Pris entre-temps (autre fenêtre) : on recharge la liste.
               ecranNouvelAvatar(encoreActuel);
@@ -397,6 +560,202 @@
       stockageOk = false;
       if (encoreActuel()) ecranAvatars(encoreActuel);
     });
+  }
+
+  // ---------- Code élève : clavier à gros chiffres ----------
+  // modes : 'ouvrir' (avatar de l'appareil), 'retrouver' (avatar créé sur un autre appareil),
+  //         'creer' (nouvel avatar), 'nouveau' (code remis à zéro par l'enseignant).
+
+  const ESSAIS_MAX = 5;
+  const BLOCAGE_MS = 60 * 60 * 1000;
+
+  function minutesRestantes(jusqua) {
+    return Math.max(1, Math.ceil((jusqua - Date.now()) / 60000));
+  }
+
+  function ecranCode(a, mode) {
+    const numero = ecranCourant; // l'écran reste valable tant qu'on ne change pas de page
+    let saisie = '';
+    let premier = null;         // création : premier code tapé
+    let occupe = false;
+
+    function consigne() {
+      if (mode === 'creer' || mode === 'nouveau') {
+        return premier === null ? 'Choisis un code secret de 4 chiffres.' : 'Tape encore ton code secret.';
+      }
+      return 'Tape ton code secret.';
+    }
+
+    function dessiner(message) {
+      let clavier = '';
+      ['1', '2', '3', '4', '5', '6', '7', '8', '9'].forEach(function (ch) {
+        clavier += '<button class="touche" type="button" data-chiffre="' + ch + '">' + ch + '</button>';
+      });
+      clavier += '<button class="touche touche-effacer" type="button" data-effacer aria-label="Effacer le dernier chiffre">⌫</button>' +
+        '<button class="touche" type="button" data-chiffre="0">0</button>';
+      afficher(
+        '<button class="retour" type="button" id="retour-code"><span aria-hidden="true">←</span> Retour</button>' +
+        '<h1><span aria-hidden="true">' + iconeAvatar(a) + '</span> ' + nomAvatar(a) + '</h1>' +
+        (mode === 'nouveau' ? '<p class="info">Ton code a été remis à zéro. Choisis-en un nouveau.</p>' : '') +
+        '<p class="consigne">' + consigne() + '</p>' +
+        '<div class="points" id="points" aria-live="polite"></div>' +
+        '<p class="message" id="message" role="alert">' + (message || '') + '</p>' +
+        '<div class="clavier">' + clavier + '</div>' +
+        (mode === 'ouvrir' || mode === 'retrouver' ? '<p class="note-discrete">Code oublié ? Demande à ton enseignant.</p>' : ''),
+        nomAvatar(a)
+      );
+      majPoints();
+      document.getElementById('retour-code').addEventListener('click', function () {
+        location.hash = '#/avatars';
+        router();
+      });
+      app.querySelectorAll('[data-chiffre]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (occupe || saisie.length >= 4) return;
+          saisie += b.dataset.chiffre;
+          majPoints();
+          if (saisie.length === 4) traiter(saisie);
+        });
+      });
+      app.querySelector('[data-effacer]').addEventListener('click', function () {
+        if (occupe) return;
+        saisie = saisie.slice(0, -1);
+        majPoints();
+      });
+    }
+
+    function majPoints() {
+      const points = document.getElementById('points');
+      if (!points) return;
+      let html = '';
+      for (let i = 0; i < 4; i++) html += '<span class="point' + (i < saisie.length ? ' plein' : '') + '" aria-hidden="true"></span>';
+      points.innerHTML = html + '<span class="sr">' + saisie.length + ' chiffre' + (saisie.length > 1 ? 's' : '') + ' sur 4</span>';
+    }
+
+    function message(texte) {
+      const m = document.getElementById('message');
+      if (m) m.textContent = texte;
+    }
+
+    function recommencer(texte) {
+      saisie = '';
+      occupe = false;
+      if (numero === ecranCourant) dessiner(texte);
+    }
+
+    function bloquer(clavierActif) {
+      app.querySelectorAll('.touche').forEach(function (b) { b.disabled = !clavierActif; });
+    }
+
+    function enregistrerLocal(code) {
+      const sel = SY.selLocal();
+      return SY.empreinteLocale(code, sel).then(function (e) {
+        a.sel = sel;
+        a.empreinteLocale = e;
+        a.essaisFaux = 0;
+        a.bloqueJusqua = null;
+        return S.enregistrerAvatar(a);
+      });
+    }
+
+    function erreurServeur(r) {
+      if (r.statut === 0) return 'Connecte-toi à Internet, puis réessaie.';
+      if (r.statut === 401) return 'Code faux. Il te reste ' + r.corps.restants + ' essai' + (r.corps.restants > 1 ? 's' : '') + '.';
+      if (r.statut === 423) return 'Trop d\'essais. Réessaie dans ' + minutesRestantes(Date.parse(r.corps.jusqua)) + ' minutes, ou demande à ton enseignant.';
+      if (r.statut === 404) return 'Cet avatar n\'existe plus dans la classe. Demande à ton enseignant.';
+      return 'Un problème est survenu. Réessaie.';
+    }
+
+    function traiter(code) {
+      occupe = true;
+
+      if (mode === 'creer' || mode === 'nouveau') {
+        if (premier === null) {
+          const probleme = SY.problemeCode(code);
+          if (probleme) { recommencer(probleme); return; }
+          premier = code;
+          recommencer('');
+          return;
+        }
+        if (code !== premier) { premier = null; recommencer('Les deux codes sont différents. Recommence.'); return; }
+        message('Enregistrement…');
+        SY.appeler(mode === 'creer' ? 'creer' : 'definir-code', { classe: a.classe, avatar: a.id, code: code }).then(function (r) {
+          if (r.statut === 200) {
+            // Crée ou met à jour l'avatar sur l'appareil, avec l'empreinte locale du code.
+            return enregistrerLocal(code).then(function () {
+              S.demanderPersistance();
+              ouvrirAvatar(a, code);
+            });
+          }
+          premier = null;
+          if (r.statut === 409 && r.corps.erreur === 'pris') {
+            recommencer('Cet avatar vient d\'être pris. Touche Retour et choisis-en un autre.');
+          } else {
+            recommencer(erreurServeur(r));
+          }
+        });
+        return;
+      }
+
+      if (mode === 'retrouver' || !a.empreinteLocale) {
+        // Vérification par le serveur (avatar venu d'un autre appareil, ou code remis à zéro).
+        message('Vérification…');
+        SY.appeler('verifier', { classe: a.classe, avatar: a.id, code: code }).then(function (r) {
+          if (r.statut === 200) {
+            enregistrerLocal(code).then(function () { ouvrirAvatar(a, code); });
+            return;
+          }
+          if (r.statut === 409 && r.corps.erreur === 'nouveauCode') {
+            mode = 'nouveau';
+            premier = null;
+            recommencer('');
+            return;
+          }
+          recommencer(erreurServeur(r));
+          if (r.statut === 423) bloquer(false);
+        });
+        return;
+      }
+
+      // Avatar de l'appareil : vérification locale, hors ligne possible.
+      SY.empreinteLocale(code, a.sel).then(function (e) {
+        if (e === a.empreinteLocale) {
+          a.essaisFaux = 0;
+          a.bloqueJusqua = null;
+          S.enregistrerAvatar(a).catch(function () {}).then(function () { ouvrirAvatar(a, code); });
+          return;
+        }
+        a.essaisFaux = (a.essaisFaux || 0) + 1;
+        let texte;
+        if (a.essaisFaux >= ESSAIS_MAX) {
+          a.essaisFaux = 0;
+          a.bloqueJusqua = Date.now() + BLOCAGE_MS;
+          texte = 'Trop d\'essais. Réessaie dans 60 minutes, ou demande à ton enseignant.';
+        } else {
+          const restants = ESSAIS_MAX - a.essaisFaux;
+          texte = 'Code faux. Il te reste ' + restants + ' essai' + (restants > 1 ? 's' : '') + '.';
+        }
+        S.enregistrerAvatar(a).catch(function () {}).then(function () {
+          recommencer(texte);
+          if (a.bloqueJusqua) bloquer(false);
+        });
+      });
+    }
+
+    // Blocage local en cours ?
+    if (mode === 'ouvrir' && a.bloqueJusqua && a.bloqueJusqua > Date.now()) {
+      dessiner('Trop d\'essais. Réessaie dans ' + minutesRestantes(a.bloqueJusqua) + ' minutes, ou demande à ton enseignant.');
+      bloquer(false);
+      return;
+    }
+    dessiner('');
+    // En ligne : l'enseignant a-t-il remis le code à zéro ? Le serveur a-t-il bloqué l'avatar ?
+    if (mode === 'ouvrir') {
+      SY.appeler('etat', { classe: a.classe, avatar: a.id }).then(function (r) {
+        if (numero !== ecranCourant || r.statut !== 200) return;
+        if (r.corps.sansCode) { mode = 'nouveau'; premier = null; recommencer(''); }
+      });
+    }
   }
 
   // ---------- Mes paquets ----------
@@ -690,6 +1049,7 @@
   function finirSeance(avatar) {
     return S.compterSeance(avatar.id).then(function (n) {
       if (avatarCourant && avatarCourant.id === avatar.id) avatarCourant.seances = n;
+      synchroniser();
       return n;
     }).catch(function () { return null; });
   }
@@ -973,8 +1333,16 @@
   function ecranReglages(encoreActuel) {
     if (!avatarCourant) {
       if (!stockageOk) { ecranAvatars(encoreActuel); return; }
-      apresAvatar = '#/reglages';
-      location.hash = '#/avatars';
+      // Sans avatar : réglages de l'appareil seulement (police, taille et voix sont propres à chaque avatar).
+      afficher(
+        lienRetour('#/avatars', 'Retour') +
+        '<h1>Réglages</h1>' +
+        '<p class="info">Choisis ton avatar pour régler la police, la taille du texte et la voix.</p>' +
+        blocAppareil() +
+        '<p><a class="lien" href="#/confidentialite">Confidentialité</a></p>',
+        'Réglages'
+      );
+      brancherAppareil(function () { ecranReglages(encoreActuel); });
       return;
     }
     const avatar = avatarCourant;
@@ -1021,9 +1389,11 @@
       [1, 2, 3].map(function (t) { return option('taille', t, '<span class="apercu-taille-' + t + '">' + TAILLES[t] + '</span>'); }).join('') +
       '</div></section>' +
       '<section class="bloc" id="bloc-voix"><h2>Voix</h2>' + blocVoix() + '</section>' +
+      blocAppareil() +
       '<p><a class="lien" href="#/confidentialite">Confidentialité</a></p>',
       'Réglages'
     );
+    brancherAppareil(function () { ecranReglages(encoreActuel); });
 
     function brancher(racine) {
       racine.querySelectorAll('.option').forEach(function (b) {
@@ -1070,14 +1440,21 @@
       '<li>Tes réponses aux cartes, pour savoir quand les revoir.</li>' +
       '<li>Le nombre de séances, pour faire pousser ta plante.</li>' +
       '<li>Tes réglages : police, taille du texte, voix.</li>' +
+      (SY.active() ? '<li>Avec une classe : le code de la classe, et ton code secret, transformé pour que personne ne puisse le lire.</li>' : '') +
       '</ul></section>' +
       '<section class="bloc"><h2>Où ?</h2>' +
-      '<p>Seulement sur cet appareil. Rien ne part sur Internet.</p>' +
+      '<p>Sur cet appareil.</p>' +
+      (SY.active()
+        ? '<p>Avec une classe, une copie part sur un serveur en Europe (Supabase, à Francfort) : ' +
+          'le code de la classe, ton avatar, ton code secret transformé, le nombre de séances de ta plante et tes réponses aux cartes. Rien d\'autre. ' +
+          'C\'est ce qui te permet de retrouver ton travail en classe et à la maison.</p>' +
+          '<p>Le serveur efface tout, chaque année, le 31 août.</p>'
+        : '<p>Rien ne part sur Internet.</p>') +
       '<p>Pas de compte, pas de cookie, pas de publicité.</p>' +
       '<p>La voix qui lit est celle de l\'appareil. Elle aussi reste sur l\'appareil.</p></section>' +
       '<section class="bloc"><h2>Comment tout effacer ?</h2>' +
-      '<p>En classe : demande à ton enseignant ou à ton enseignante.</p>' +
-      '<p>À la maison : supprime l\'app de l\'écran d\'accueil. Tout est effacé.</p></section>' +
+      '<p>Demande à ton enseignant ou à ton enseignante : ' + (SY.active() ? 'il peut effacer tes données sur l\'appareil et sur le serveur.' : 'il peut tout effacer.') + '</p>' +
+      '<p>À la maison : supprimer l\'app de l\'écran d\'accueil efface ce qui est sur l\'appareil.</p></section>' +
       '<section class="bloc"><h2>Crédits</h2>' +
       '<p>Police Luciole © Laurent Bourcellier &amp; Jonathan Fabreguettes (Perez), 2019-2026, typographies.fr. ' +
       'Licence Creative Commons Attribution 4.0 International : creativecommons.org/licenses/by/4.0/deed.fr. ' +
@@ -1107,7 +1484,29 @@
     setDecalage: function (n) { decalageJours = n; },
     aujourdhui: aujourdhui,
     dateLisible: dateLisible,
-    reinitialiser: function () { memoriserAvatar(null); decalageJours = 0; }
+    reinitialiser: function () {
+      memoriserAvatar(null);
+      decalageJours = 0;
+      classeAppareil = null;
+      sansClasse = false;
+      codeCourant = null;
+    },
+    // Synchronisation (lot 5 bis)
+    SY: SY,
+    getClasse: function () { return classeAppareil; },
+    setClasse: function (code) {
+      classeAppareil = code;
+      sansClasse = false;
+      return S.ecrireReglage('classe', code).then(function () { return S.ecrireReglage('sansClasse', false); });
+    },
+    oublierClasse: function () {
+      classeAppareil = null;
+      return S.ecrireReglage('classe', null);
+    },
+    nomAvatarId: function (id) {
+      const morceaux = String(id).split('-');
+      return nomAvatar({ animal: morceaux[0], couleur: morceaux[1] });
+    }
   });
 
   // ---------- Navigation ----------
@@ -1155,6 +1554,10 @@
     return S.ouvrir()
       .then(function () { return S.lireReglage('decalageJours', 0); })
       .then(function (n) { decalageJours = Number(n) || 0; })
+      .then(function () { return S.lireReglage('classe', null); })
+      .then(function (c) { classeAppareil = c; })
+      .then(function () { return S.lireReglage('sansClasse', false); })
+      .then(function (v) { sansClasse = v === true; })
       .then(function () { return idMemorise ? S.lireAvatar(idMemorise) : null; })
       .then(function (a) { if (a) memoriserAvatar(a); })
       .catch(function () { stockageOk = false; });
