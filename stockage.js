@@ -86,9 +86,9 @@
   function compterSeance(id) {
     return transaction(['avatars'], 'readwrite', function (m) {
       return requete(m.avatars.get(id)).then(function (a) {
-        if (!a) return;
+        if (!a) return 0;
         a.seances = (a.seances || 0) + 1;
-        return requete(m.avatars.put(a));
+        return requete(m.avatars.put(a)).then(function () { return a.seances; });
       });
     });
   }

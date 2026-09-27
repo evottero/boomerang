@@ -19,7 +19,8 @@
  * Types de quiz (tous ont "explication") :
  *   qcm      "question", "choix": 3 réponses, "reponse": position de la bonne (0, 1 ou 2)
  *   vraifaux "question" (une affirmation), "reponse": true ou false
- *   trous    "texte" contenant une seule fois ___, "reponse": le mot manquant
+ *   trous    "texte" contenant une seule fois ___, "reponse": le mot manquant,
+ *            "accents" facultatif : false par défaut (accents manquants acceptés), true (accent exigé)
  *   ordre    "question", "elements": 3 à 6 éléments, écrits dans le bon ordre (l'app les mélange)
  *
  * Aucun champ en dehors de cette liste n'est accepté : un paquet ne transporte
@@ -45,7 +46,7 @@
   const CHAMPS_QUIZ = {
     qcm: ['type', 'question', 'choix', 'reponse', 'explication'],
     vraifaux: ['type', 'question', 'reponse', 'explication'],
-    trous: ['type', 'texte', 'reponse', 'explication'],
+    trous: ['type', 'texte', 'reponse', 'explication', 'accents'],
     ordre: ['type', 'question', 'elements', 'explication']
   };
 
@@ -162,6 +163,7 @@
       if (!estTexte(q.texte)) err(ou + '« texte » vide ou absent.');
       else if (q.texte.split('___').length !== 2) err(ou + '« texte » doit contenir une seule fois ___ (trois tirets bas).');
       if (!estTexte(q.reponse)) err(ou + '« reponse » doit être le mot manquant.');
+      if ('accents' in q && typeof q.accents !== 'boolean') err(ou + '« accents » doit être true ou false, sans guillemets.');
     } else if (q.type === 'ordre') {
       if (!Array.isArray(q.elements) || q.elements.length < 3 || q.elements.length > 6 || !q.elements.every(estTexte)) {
         err(ou + '« elements » doit contenir 3 à 6 éléments, dans le bon ordre.');

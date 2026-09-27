@@ -2,15 +2,16 @@
 
 // Lecteur élève et atelier enseignant minimal.
 // Écrans : #/ (avatar puis paquets), #/avatars, #/avatar/nouveau, #/paquets,
-// #/paquet/ID, #/paquet/ID/fiche, #/paquet/ID/cartes, #/atelier (caché).
+// #/paquet/ID, #/paquet/ID/fiche, #/paquet/ID/cartes, #/paquet/ID/quiz, #/atelier (caché).
 // Aucun cookie, aucune requête hors du site.
 
 (function () {
   const V = window.ValidationPaquet;
   const M = window.Moteur;
   const S = window.Stockage;
+  const Q = window.Quiz;
   const app = document.getElementById('app');
-  const VERSION_APP = '0.2.1';
+  const VERSION_APP = '0.3.0';
 
   const DISCIPLINES = {
     histoire: { nom: 'Histoire', icone: '🏰' },
@@ -407,7 +408,7 @@
         '<div class="activites">' +
         '<a class="activite" href="#/paquet/' + p.id + '/fiche"><span aria-hidden="true">📄</span> Fiche</a>' +
         '<a class="activite" href="#/paquet/' + p.id + '/cartes"><span aria-hidden="true">🃏</span> Cartes</a>' +
-        '<button class="activite" type="button" disabled><span aria-hidden="true">❓</span> Quiz <span class="bientot">bientôt</span></button>' +
+        '<a class="activite" href="#/paquet/' + p.id + '/quiz"><span aria-hidden="true">❓</span> Quiz</a>' +
         '</div>',
         p.titre
       );
@@ -560,7 +561,12 @@
     }
 
     function bilan() {
-      S.compterSeance(avatar.id).catch(function () {});
+      finirSeance(avatar).then(function (seances) {
+        if (encoreActuel()) afficherBilan(seances);
+      });
+    }
+
+    function afficherBilan(seances) {
       const vues = Object.keys(premiereNote);
       const reussites = vues.filter(function (c) { return premiereNote[c] === 'savais'; }).length;
       const aRevoir = vues.filter(function (c) { return derniereNote[c] !== 'savais'; });
@@ -573,11 +579,287 @@
         aRevoir.forEach(function (c) { html += '<li>' + avecGras(cartes[c].recto) + '</li>'; });
         html += '</ul><p>Elles reviendront dans une prochaine séance.</p>';
       }
-      html += '<a class="bouton" href="#/paquet/' + p.id + '">Revenir au paquet</a>';
+      html += blocPlante(seances) +
+        '<a class="bouton" href="#/paquet/' + p.id + '">Revenir au paquet</a>';
       afficher(html, 'Séance terminée');
     }
 
     recto();
+  }
+
+  // ---------- Fin de séance et plante ----------
+
+  // Compte la séance pour l'avatar. Renvoie le nombre de séances, ou null si l'enregistrement échoue.
+  function finirSeance(avatar) {
+    return S.compterSeance(avatar.id).then(function (n) {
+      if (avatarCourant && avatarCourant.id === avatar.id) avatarCourant.seances = n;
+      return n;
+    }).catch(function () { return null; });
+  }
+
+  // Dessin de la plante selon l'étape (0 : graine, 5 : fleur).
+  function svgPlante(etape) {
+    const hauteurs = [0, 76, 64, 52, 44, 40];
+    const paires = [0, 1, 2, 3, 3, 3];
+    const haut = hauteurs[etape];
+    let svg = '<svg class="plante-dessin" viewBox="0 0 120 140" aria-hidden="true" focusable="false">';
+    if (etape === 0) {
+      svg += '<ellipse cx="60" cy="90" rx="7" ry="4.5" fill="#8a6d3b"/>';
+    } else {
+      svg += '<rect x="58.5" y="' + haut + '" width="3" height="' + (95 - haut) + '" rx="1.5" fill="#3f6b3a"/>';
+      for (let k = 0; k < paires[etape]; k++) {
+        const y = haut + 8 + k * 14;
+        svg += '<ellipse cx="48" cy="' + y + '" rx="11" ry="5" fill="#5f9150" transform="rotate(-25 48 ' + y + ')"/>' +
+          '<ellipse cx="72" cy="' + (y + 5) + '" rx="11" ry="5" fill="#3f6b3a" transform="rotate(25 72 ' + (y + 5) + ')"/>';
+      }
+      if (etape === 4) {
+        svg += '<ellipse cx="60" cy="' + (haut - 5) + '" rx="5" ry="7" fill="#b8567a"/>';
+      }
+      if (etape === 5) {
+        const cy = haut - 7;
+        for (let a = 0; a < 5; a++) {
+          const ang = (a * 72 - 90) * Math.PI / 180;
+          svg += '<circle cx="' + (60 + 8 * Math.cos(ang)).toFixed(1) + '" cy="' + (cy + 8 * Math.sin(ang)).toFixed(1) + '" r="6.5" fill="#e3a33b"/>';
+        }
+        svg += '<circle cx="60" cy="' + cy + '" r="5" fill="#8a4b1f"/>';
+      }
+    }
+    svg += '<ellipse cx="60" cy="96" rx="25" ry="4" fill="#6b4a2f"/>' +
+      '<polygon points="36,100 84,100 78,132 42,132" fill="#b07048"/>' +
+      '<rect x="31" y="93" width="58" height="10" rx="2" fill="#965c3a"/>' +
+      '</svg>';
+    return svg;
+  }
+
+  function blocPlante(seances) {
+    if (seances === null || seances === undefined) return '';
+    const etape = M.etapePlante(seances);
+    const avant = M.etapePlante(seances - 1);
+    return '<section class="plante">' + svgPlante(etape.numero) +
+      '<div><p class="plante-titre">' + (etape.numero > avant.numero ? 'Ta plante a grandi !' : 'Ta plante') + '</p>' +
+      '<p>C\'est ' + etape.nom + '. ' + seances + (seances > 1 ? ' séances terminées.' : ' séance terminée.') + '</p></div>' +
+      '</section>';
+  }
+
+  // ---------- Quiz ----------
+
+  function ecranQuiz(id, encoreActuel) {
+    if (!avatarCourant) {
+      if (!stockageOk) { ecranAvatars(encoreActuel); return; }
+      apresAvatar = '#/paquet/' + id + '/quiz';
+      location.hash = '#/avatars';
+      return;
+    }
+    afficher('<p class="consigne">Chargement…</p>');
+    const avatar = avatarCourant;
+    chargerPaquet(id).then(function (r) {
+      if (!encoreActuel()) return;
+      if (!r.paquet) { ecranErreur(r); return; }
+      lancerQuiz(r.paquet, avatar, encoreActuel);
+    });
+  }
+
+  function bonneReponse(q) {
+    if (q.type === 'qcm') return q.choix[q.reponse];
+    if (q.type === 'vraifaux') return q.reponse ? 'Vrai' : 'Faux';
+    if (q.type === 'trous') return q.reponse;
+    return q.elements.join(' → ');
+  }
+
+  function lancerQuiz(p, avatar, encoreActuel) {
+    const d = Q.creerDeroule(p.quiz.length);
+
+    afficher(
+      lienRetour('#/paquet/' + p.id, p.titre) +
+      '<h1>Quiz : ' + echapper(p.titre) + '</h1>' +
+      '<p class="progression" id="progression"></p>' +
+      '<div id="zone-quiz"></div>',
+      'Quiz : ' + p.titre
+    );
+    const zone = document.getElementById('zone-quiz');
+    const progression = document.getElementById('progression');
+
+    function question() {
+      const i = Q.questionCourante(d);
+      const q = p.quiz[i];
+      progression.textContent = 'Question ' + (d.position + 1) + ' sur ' + d.file.length;
+      let html = (i in d.premier) ? '<p class="deuxieme-essai">Deuxième essai</p>' : '';
+
+      if (q.type === 'qcm') {
+        html += '<p class="consigne">Choisis la bonne réponse.</p>' +
+          '<p class="question">' + avecGras(q.question) + '</p><div class="reponses">';
+        q.choix.forEach(function (c, k) {
+          html += '<button class="reponse" type="button" data-valeur="' + k + '">' + avecGras(c) + '</button>';
+        });
+        html += '</div>';
+      } else if (q.type === 'vraifaux') {
+        html += '<p class="consigne">Dis si c\'est vrai ou faux.</p>' +
+          '<p class="question">' + avecGras(q.question) + '</p><div class="reponses deux">' +
+          '<button class="reponse" type="button" data-valeur="true">Vrai</button>' +
+          '<button class="reponse" type="button" data-valeur="false">Faux</button></div>';
+      } else if (q.type === 'trous') {
+        const morceaux = q.texte.split('___');
+        html += '<p class="consigne">Écris le mot qui manque.</p>' +
+          '<p class="question">' + avecGras(morceaux[0]) +
+          '<input class="trou" id="trou" type="text" aria-label="Mot qui manque" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">' +
+          avecGras(morceaux[1]) + '</p>' +
+          '<button class="bouton" type="button" id="valider" disabled>Valider</button>';
+      } else {
+        html += '<p class="consigne">Touche les étiquettes dans le bon ordre.</p>' +
+          '<p class="question">' + avecGras(q.question) + '</p>' +
+          '<ol class="cases" id="cases"></ol>' +
+          '<div class="etiquettes-ordre" id="etiquettes"></div>' +
+          '<p class="note-discrete">Touche une case pour retirer son étiquette.</p>' +
+          '<button class="bouton" type="button" id="valider" disabled>Valider</button>';
+      }
+      zone.innerHTML = html;
+
+      if (q.type === 'qcm' || q.type === 'vraifaux') {
+        zone.querySelectorAll('.reponse').forEach(function (b) {
+          b.addEventListener('click', function () {
+            const valeur = q.type === 'qcm' ? Number(b.dataset.valeur) : b.dataset.valeur === 'true';
+            b.classList.add('choisie');
+            valider(q, valeur);
+          });
+        });
+      } else if (q.type === 'trous') {
+        const champ = document.getElementById('trou');
+        const bouton = document.getElementById('valider');
+        champ.addEventListener('input', function () { bouton.disabled = champ.value.trim() === ''; });
+        champ.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && champ.value.trim() !== '') { e.preventDefault(); valider(q, champ.value); }
+        });
+        bouton.addEventListener('click', function () { valider(q, champ.value); });
+        champ.focus();
+      } else {
+        brancherOrdre(q);
+      }
+    }
+
+    // Remise en ordre : l'élève touche les étiquettes, elles se placent dans des cases numérotées.
+    function brancherOrdre(q) {
+      const melange = Q.melangerOrdre(q.elements);
+      const places = []; // indices dans melange, dans l'ordre choisi
+      const cases = document.getElementById('cases');
+      const etiquettes = document.getElementById('etiquettes');
+      const bouton = document.getElementById('valider');
+
+      function dessiner() {
+        let hc = '';
+        for (let k = 0; k < melange.length; k++) {
+          const m = places[k];
+          if (m === undefined) {
+            hc += '<li><button class="case vide" type="button" disabled aria-label="Case ' + (k + 1) + ', vide">' +
+              '<span class="case-numero" aria-hidden="true">' + (k + 1) + '</span><span class="case-texte"></span></button></li>';
+          } else {
+            hc += '<li><button class="case" type="button" data-k="' + k + '" aria-label="Case ' + (k + 1) + ' : ' + echapper(melange[m]) + '. Touche pour retirer.">' +
+              '<span class="case-numero" aria-hidden="true">' + (k + 1) + '</span><span class="case-texte">' + avecGras(melange[m]) + '</span></button></li>';
+          }
+        }
+        cases.innerHTML = hc;
+        let he = '';
+        melange.forEach(function (e, m) {
+          const placee = places.indexOf(m) !== -1;
+          he += '<button class="etiquette-ordre' + (placee ? ' placee' : '') + '" type="button" data-m="' + m + '"' +
+            (placee ? ' disabled aria-hidden="true"' : '') + '>' + avecGras(e) + '</button>';
+        });
+        etiquettes.innerHTML = he;
+        bouton.disabled = places.length !== melange.length;
+
+        cases.querySelectorAll('.case[data-k]').forEach(function (b) {
+          b.addEventListener('click', function () { places.splice(Number(b.dataset.k), 1); dessiner(); });
+        });
+        etiquettes.querySelectorAll('.etiquette-ordre:not(.placee)').forEach(function (b) {
+          b.addEventListener('click', function () { places.push(Number(b.dataset.m)); dessiner(); });
+        });
+      }
+
+      bouton.addEventListener('click', function () {
+        valider(q, places.map(function (m) { return melange[m]; }));
+      });
+      dessiner();
+    }
+
+    function valider(q, reponse) {
+      const res = Q.corriger(q, reponse);
+      const reviendra = Q.repondre(d, res.juste);
+
+      // Plus de réponse possible : on montre la correction sur place.
+      zone.querySelectorAll('button').forEach(function (el) { el.disabled = true; });
+      zone.querySelectorAll('input').forEach(function (el) { el.readOnly = true; el.blur(); });
+      const boutonValider = document.getElementById('valider');
+      if (boutonValider) boutonValider.remove();
+      if (q.type === 'qcm' || q.type === 'vraifaux') {
+        zone.querySelectorAll('.reponse').forEach(function (b) {
+          const valeur = q.type === 'qcm' ? Number(b.dataset.valeur) : b.dataset.valeur === 'true';
+          if (valeur === q.reponse) {
+            b.classList.add('bonne');
+            b.insertAdjacentHTML('afterbegin', '<span class="marque" aria-hidden="true">✓</span>');
+          } else if (b.classList.contains('choisie')) {
+            b.classList.add('fausse');
+            b.insertAdjacentHTML('afterbegin', '<span class="marque" aria-hidden="true">✗</span>');
+          }
+        });
+      } else if (q.type === 'trous') {
+        document.getElementById('trou').classList.add(res.juste ? 'bonne' : 'fausse');
+      } else {
+        document.getElementById('cases').classList.add(res.juste ? 'bonne' : 'fausse');
+      }
+
+      let html = '<div class="correction ' + (res.juste ? 'juste' : 'faux') + '" id="correction" tabindex="-1">' +
+        '<p class="verdict">' + (res.juste ? '✓ C\'est juste.' : '✗ Ce n\'est pas ça.') + '</p>';
+      if (!res.juste) {
+        if (q.type === 'ordre') {
+          html += '<p>Le bon ordre :</p><ol class="bon-ordre">';
+          q.elements.forEach(function (e) { html += '<li>' + avecGras(e) + '</li>'; });
+          html += '</ol>';
+        } else {
+          html += '<p>La bonne réponse : <strong>' + avecGras(bonneReponse(q)) + '</strong></p>';
+        }
+      } else if (res.orthographe) {
+        html += '<p>Attention à l\'orthographe : <strong>' + echapper(q.reponse) + '</strong></p>';
+      }
+      html += '<p class="explication">' + avecGras(q.explication) + '</p>';
+      if (reviendra) html += '<p class="note-discrete">Cette question reviendra à la fin du quiz.</p>';
+      html += '</div><button class="bouton" type="button" id="continuer">Continuer</button>';
+      zone.insertAdjacentHTML('beforeend', html);
+
+      const correction = document.getElementById('correction');
+      correction.focus();
+      correction.scrollIntoView({ block: 'nearest' });
+      document.getElementById('continuer').addEventListener('click', function () {
+        if (Q.suivante(d)) question();
+        else bilan();
+      });
+    }
+
+    function bilan() {
+      finirSeance(avatar).then(function (seances) {
+        if (!encoreActuel()) return;
+        const b = Q.bilan(d);
+        let html = lienRetour('#/paquet/' + p.id, p.titre) +
+          '<h1>Quiz terminé</h1>' +
+          '<p class="consigne">Tu as réussi <strong>' + b.reussites + '</strong> ' + (b.reussites > 1 ? 'questions' : 'question') +
+          ' sur <strong>' + b.total + '</strong> du premier coup.</p>';
+        if (b.rattrapees) {
+          html += '<p>Tu en as corrigé ' + b.rattrapees + ' à la fin.</p>';
+        }
+        if (b.aRevoir.length) {
+          html += '<h2>Questions à revoir</h2><ul class="a-revoir">';
+          b.aRevoir.forEach(function (i) {
+            const q = p.quiz[i];
+            html += '<li>' + avecGras(q.type === 'trous' ? q.texte : q.question) +
+              '<br><span class="reponse-attendue">Réponse : ' + avecGras(bonneReponse(q)) + '</span></li>';
+          });
+          html += '</ul>';
+        }
+        html += blocPlante(seances) +
+          '<a class="bouton" href="#/paquet/' + p.id + '">Revenir au paquet</a>';
+        afficher(html, 'Quiz terminé');
+      });
+    }
+
+    question();
   }
 
   // ---------- Atelier enseignant (minimal) ----------
@@ -693,6 +975,7 @@
       const id = decodeURIComponent(morceaux[1]);
       if (morceaux[2] === 'fiche') ecranFiche(id, encoreActuel);
       else if (morceaux[2] === 'cartes') ecranCartes(id, encoreActuel);
+      else if (morceaux[2] === 'quiz') ecranQuiz(id, encoreActuel);
       else ecranPaquet(id, encoreActuel);
     } else if (morceaux[0] === 'paquets') {
       ecranAccueil(encoreActuel);

@@ -349,3 +349,130 @@ button.carte:active { background: var(--sable-clair); }
 .note-discrete { color: var(--encre-douce); font-size: 0.95rem; }
 
 .version { cursor: default; -webkit-user-select: none; user-select: none; }
+
+/* ---------- Lot 3 : quiz, bilan, plante ---------- */
+
+.question { font-size: 1.45rem; font-weight: 700; line-height: 1.6; margin: 0 0 1.25rem; }
+.deuxieme-essai {
+  display: inline-block;
+  margin: 0;
+  padding: 0.1rem 0.7rem;
+  background: var(--sable);
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.reponses { display: grid; gap: 0.75rem; }
+.reponses.deux { grid-template-columns: 1fr 1fr; }
+.reponse {
+  min-height: 64px;
+  padding: 0.75rem 1rem;
+  background: var(--blanc);
+  border: 3px solid var(--sable);
+  border-radius: 14px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-align: left;
+}
+.reponses.deux .reponse { text-align: center; font-size: 1.4rem; font-weight: 700; }
+.reponse:active { background: var(--sable); }
+.reponse[disabled] { color: var(--encre); }
+.reponse.bonne { border-color: var(--vert); background: #e3efdc; }
+.reponse.fausse { border-color: var(--rouge); background: #f6e1dd; }
+.marque { font-weight: 700; margin-right: 0.5rem; }
+
+/* Texte à trous */
+.trou {
+  width: 9em;
+  max-width: 100%;
+  min-height: 48px;
+  margin: 0 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border: 0;
+  border-bottom: 3px solid var(--encre-douce);
+  border-radius: 6px 6px 0 0;
+  background: var(--blanc);
+  font: inherit;
+  font-size: 1.3rem;
+  color: var(--encre);
+}
+.trou:focus { outline: 3px solid var(--vert); outline-offset: 2px; }
+.trou.bonne { border-bottom-color: var(--vert); background: #e3efdc; }
+.trou.fausse { border-bottom-color: var(--rouge); background: #f6e1dd; }
+
+/* Remise en ordre : cases numérotées */
+.cases { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: 0.5rem; }
+.case {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--blanc);
+  border: 3px solid var(--vert);
+  border-radius: 12px;
+  text-align: left;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.case.vide { border: 3px dashed var(--sable); background: transparent; color: var(--encre); }
+.case-numero {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--sable);
+  text-align: center;
+  line-height: 2rem;
+  font-weight: 700;
+}
+.cases.bonne .case { border-color: var(--vert); background: #e3efdc; }
+.cases.fausse .case { border-color: var(--rouge); background: #f6e1dd; }
+
+.etiquettes-ordre { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 0.25rem; }
+.etiquette-ordre {
+  min-height: 52px;
+  padding: 0.5rem 1rem;
+  background: var(--blanc);
+  border: 3px solid var(--encre-douce);
+  border-radius: 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.etiquette-ordre:active { background: var(--sable); }
+.etiquette-ordre.placee { display: none; }
+
+/* Correction */
+.correction {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  background: var(--blanc);
+  border: 3px solid var(--vert);
+  border-radius: 14px;
+}
+.correction:focus { outline: none; }
+.correction.faux { border-color: var(--rouge); }
+.correction p { margin: 0.35rem 0; }
+.verdict { font-size: 1.3rem; font-weight: 700; }
+.correction.juste .verdict { color: var(--vert); }
+.correction.faux .verdict { color: var(--rouge); }
+.bon-ordre { margin: 0.25rem 0; padding-left: 1.5rem; font-weight: 600; }
+
+.reponse-attendue { color: var(--encre-douce); }
+
+/* Plante */
+.plante {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.5rem 0 0;
+  padding: 0.75rem 1rem;
+  background: var(--blanc);
+  border: 2px solid var(--sable);
+  border-radius: 14px;
+}
+.plante-dessin { width: 96px; height: 112px; flex: none; }
+.plante p { margin: 0.2rem 0; }
+.plante-titre { font-weight: 700; font-size: 1.2rem; }

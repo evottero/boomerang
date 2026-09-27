@@ -73,6 +73,8 @@ Deux outils : un atelier enseignant pour fabriquer les paquets, un lecteur élè
     - Fiche : 5 à 8 idées clés, courtes, avec mots importants en gras.
     - Cartes : recto (question, mot, date), verso (réponse). L'élève se note : « Je savais », « Presque », « Je ne savais pas ».
     - Quiz : QCM à 3 choix, vrai ou faux, texte à trous, remise en ordre. Correction immédiate avec l'explication.
+        - Remise en ordre : pas de glisser-déposer. L'élève touche les étiquettes dans l'ordre, elles se placent dans des cases numérotées ; un nouvel appui sur une case retire son étiquette.
+        - Texte à trous : l'élève tape le mot. Les majuscules et les espaces en trop sont ignorés. Les accents suivent le champ `accents` de la question (section 10).
 - Fin de séance : nombre de réussites, cartes à revoir, message court et factuel. Pas de classement entre élèves.
 - Trois niveaux par paquet, choisis par l'enseignant ou par l'élève selon le réglage.
 
@@ -204,7 +206,7 @@ Types de quiz (chacun a une `explication`, affichée après la réponse) :
 | --- | --- | --- |
 | `qcm` | `question`, `choix`, `reponse` | 3 choix différents. `reponse` : position de la bonne réponse, 0, 1 ou 2 |
 | `vraifaux` | `question`, `reponse` | `question` est une affirmation. `reponse` : `true` ou `false`, sans guillemets |
-| `trous` | `texte`, `reponse` | `texte` contient une seule fois `___` (trois tirets bas). `reponse` : le mot manquant. Pas de champ `question` |
+| `trous` | `texte`, `reponse`, `accents` (facultatif) | `texte` contient une seule fois `___` (trois tirets bas). `reponse` : le mot manquant. Pas de champ `question`. `accents` : `false` par défaut, les accents manquants sont acceptés mais la bonne orthographe s'affiche ; `true`, l'accent est exigé |
 | `ordre` | `question`, `elements` | 3 à 6 éléments différents, écrits dans le bon ordre. L'app les mélange |
 
 Aucun champ ne contient de donnée d'élève : tout champ inconnu fait refuser le paquet. Le projet fournit aussi le prompt de génération à coller dans Claude avec la leçon (phrases courtes, vocabulaire de la leçon, pas de piège).

@@ -136,3 +136,10 @@ test('trop d\'erreurs : liste raccourcie', function () {
   assert.strictEqual(r.erreurs.length, 21);
   contient(r.erreurs, 'd\'autres erreurs');
 });
+
+test('trous : champ facultatif « accents » (true ou false)', function () {
+  assert.deepStrictEqual(erreurs(function (p) { p.quiz[4].accents = true; }), []);
+  assert.deepStrictEqual(erreurs(function (p) { p.quiz[4].accents = false; }), []);
+  contient(erreurs(function (p) { p.quiz[4].accents = 'oui'; }), '« accents » doit être true ou false');
+  contient(erreurs(function (p) { p.quiz[0].accents = true; }), 'question 1 (qcm) : champ inconnu « accents »');
+});

@@ -78,6 +78,22 @@
     return cles.filter(function (c) { return !etats[c]; }).length;
   }
 
+  // Plante de l'avatar : elle grandit au fil des séances terminées (cartes ou quiz).
+  const ETAPES_PLANTE = [
+    { depuis: 0, nom: 'une graine' },
+    { depuis: 1, nom: 'une pousse' },
+    { depuis: 3, nom: 'une jeune plante' },
+    { depuis: 6, nom: 'une plante avec des feuilles' },
+    { depuis: 10, nom: 'une plante en bouton' },
+    { depuis: 15, nom: 'une plante en fleur' }
+  ];
+
+  function etapePlante(seances) {
+    let etape = 0;
+    ETAPES_PLANTE.forEach(function (e, i) { if (seances >= e.depuis) etape = i; });
+    return { numero: etape, nom: ETAPES_PLANTE[etape].nom };
+  }
+
   // Identifiant stable d'une carte : son contenu. Corriger une carte remet sa progression à zéro.
   function cleCarte(carte) {
     return carte.recto + '␞' + carte.verso;
@@ -93,7 +109,8 @@
     composerSeanceAnticipee: composerSeanceAnticipee,
     compterEnRetard: compterEnRetard,
     compterNouvelles: compterNouvelles,
-    cleCarte: cleCarte
+    cleCarte: cleCarte,
+    etapePlante: etapePlante
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
