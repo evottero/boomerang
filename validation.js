@@ -9,8 +9,9 @@
  *   "titre": "La Révolution française",
  *   "discipline": "histoire",          voir DISCIPLINES
  *   "periode": "P2",                   P1 à P10
- *   "niveau": "standard",              accompagné, standard ou approfondi
+ *   "niveau": "standard",              accompagne, standard ou approfondi (« accompagné » accepté aussi)
  *   "relu": true,                      obligatoire : un paquet non relu est refusé
+ *   "accents": false,                  facultatif : true = accents exigés dans tous les textes à trous
  *   "fiche": ["…"],                    5 à 8 idées clés ; **mot** en gras, *mot* en italique
  *   "cartes": [{ "recto": "…", "verso": "…" }],
  *   "quiz": [ … ]                      voir les 4 types ci-dessous
@@ -20,7 +21,7 @@
  *   qcm      "question", "choix": 3 réponses, "reponse": position de la bonne (0, 1 ou 2)
  *   vraifaux "question" (une affirmation), "reponse": true ou false
  *   trous    "texte" contenant une seule fois ___, "reponse": le mot manquant,
- *            "accents" facultatif : false par défaut (accents manquants acceptés), true (accent exigé)
+ *            "accents" facultatif sur la question : remplace celui du paquet pour cette question
  *   ordre    "question", "elements": 3 à 6 éléments, écrits dans le bon ordre (l'app les mélange)
  *
  * Aucun champ en dehors de cette liste n'est accepté : un paquet ne transporte
@@ -33,15 +34,16 @@
   const MAX_ERREURS = 20;
 
   const DISCIPLINES = [
-    'histoire', 'geographie', 'sciences', 'vocabulaire',
-    'grammaire', 'conjugaison', 'calcul', 'geometrie', 'mesures'
+    'histoire', 'geographie', 'sciences', 'grammaire', 'conjugaison', 'vocabulaire',
+    'nombres', 'calcul', 'grandeurs', 'geometrie', 'emc'
   ];
   const PERIODES = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
-  const NIVEAUX = ['accompagné', 'standard', 'approfondi'];
+  const NIVEAUX = ['accompagne', 'standard', 'approfondi'];
+  const NIVEAUX_ACCEPTES = NIVEAUX.concat(['accompagné']); // ancienne écriture, toujours lue
   const TYPES_QUIZ = ['qcm', 'vraifaux', 'trous', 'ordre'];
   const ID_VALIDE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-  const CHAMPS_PAQUET = ['version', 'id', 'titre', 'discipline', 'periode', 'niveau', 'relu', 'fiche', 'cartes', 'quiz'];
+  const CHAMPS_PAQUET = ['version', 'id', 'titre', 'discipline', 'periode', 'niveau', 'relu', 'accents', 'fiche', 'cartes', 'quiz'];
   const CHAMPS_CARTE = ['recto', 'verso'];
   const CHAMPS_QUIZ = {
     qcm: ['type', 'question', 'choix', 'reponse', 'explication'],
@@ -89,7 +91,8 @@
       err('« discipline » inconnue. Valeurs possibles : ' + liste(DISCIPLINES) + '.');
     }
     if (PERIODES.indexOf(p.periode) === -1) err('« periode » doit être P1 à P10.');
-    if (NIVEAUX.indexOf(p.niveau) === -1) err('« niveau » doit être : ' + liste(NIVEAUX) + '.');
+    if (NIVEAUX_ACCEPTES.indexOf(p.niveau) === -1) err('« niveau » doit être : ' + liste(NIVEAUX) + '.');
+    if ('accents' in p && typeof p.accents !== 'boolean') err('« accents » doit être true ou false, sans guillemets.');
     if (p.relu !== true) err('Ce paquet n\'est pas marqué comme relu (« relu »: true).');
 
     // Fiche

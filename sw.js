@@ -4,7 +4,7 @@
 // Avec le réseau, l'app prend toujours la dernière version en ligne ;
 // le cache ne sert que hors ligne ou si le réseau est trop lent.
 // Change VERSION à chaque mise en ligne pour renouveler la copie hors ligne.
-const VERSION = 'v0.4.2';
+const VERSION = 'v0.5.1';
 const CACHE = 'revision-cm2-' + VERSION;
 // Les paquets ouverts ont leur propre cache, conservé d'une version à l'autre.
 const CACHE_PAQUETS = 'revision-cm2-paquets';
@@ -20,6 +20,8 @@ const FICHIERS = [
   'stockage.js',
   'quiz.js',
   'voix.js',
+  'qrcode.js',
+  'atelier.js',
   'app.js',
   'manifest.webmanifest',
   'polices/Luciole-Regular.woff2',

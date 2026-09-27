@@ -1,19 +1,19 @@
-# Cahier des charges – Webapp de révision CM2 (type Baobab, zéro collecte)
+# Boomerang – Cahier des charges de la webapp de révision CM2 (type Baobab, données minimales)
 
-Version du 26/09/2026. Ce fichier est la référence du projet. Relis-le au début de chaque session et respecte en priorité la section 3.
+Version du 27/09/2026. Ce fichier est la référence du projet. Relis-le au début de chaque session et respecte en priorité la section 3.
 
 ## 1. Faisabilité et choix d'architecture
 
-Webapp installable (PWA) qui tourne sur iPad et iPhone, sans compte ni serveur de données. Le seul point dur est l'IA : générer une fiche à partir d'une photo impose d'envoyer du contenu à un modèle distant. D'où deux modes, livrés en deux temps.
+Webapp installable (PWA) qui tourne sur iPad et iPhone, sans compte nominatif. Un serveur de synchronisation facultatif (lot 5 bis) ne garde que les données minimales de la section 3. Le seul point dur est l'IA : générer une fiche à partir d'une photo impose d'envoyer du contenu à un modèle distant. D'où deux modes, livrés en deux temps.
 
 | Mode | Qui utilise l'IA | Ce qui sort de l'iPad élève | Version |
 | --- | --- | --- | --- |
 | Mode Classe | L'enseignant, sur son poste, à partir de ses propres leçons | Rien. L'élève charge un paquet de révision et travaille hors ligne | V1 |
 | Mode Photo | L'élève (ou le parent), depuis l'app | Le texte de la leçon, sans image, après relecture et nettoyage | V2, optionnelle |
 
-Le Mode Classe tient seul et respecte strictement le zéro collecte. Le Mode Photo reste désactivé par défaut et ne s'active qu'après validation (section 15).
+Le Mode Classe fonctionne entièrement hors ligne ; la synchronisation ne fait que recopier la progression entre les appareils d'un même élève. Le Mode Photo reste désactivé par défaut et ne s'active qu'après validation (section 15).
 
-Architecture retenue : site statique (HTML, CSS, JavaScript), hébergé gratuitement (GitHub Pages ou Netlify), service worker pour le hors ligne, stockage local IndexedDB. Aucune base de données distante, aucun compte, aucun outil d'analyse d'audience.
+Architecture retenue : site statique (HTML, CSS, JavaScript), hébergé gratuitement (GitHub Pages ou Netlify), service worker pour le hors ligne, stockage local IndexedDB, qui reste la référence. Synchronisation par un projet Supabase gratuit, en région Europe (Francfort) : la base n'est jamais accessible directement depuis l'app, tout passe par une Edge Function. Aucun compte nominatif, aucun outil d'analyse d'audience.
 
 ## 2. Objectifs et périmètre
 
@@ -28,18 +28,20 @@ Objectifs mesurables :
 
 Périmètre V1 : Mode Classe, lecteur de paquets, 3 activités (fiche, cartes, quiz), répétition espacée locale, affichage adapté DYS, lecture à voix haute. Disciplines prioritaires : histoire-géographie, sciences, vocabulaire, grammaire, conjugaison, faits numériques, grandeurs et mesures.
 
-## 3. Principe zéro collecte : règles opposables
+## 3. Données minimales : règles opposables
 
 Ces règles s'imposent au code. Vérifie-les à chaque étape. Chaque règle a un test de recette (section 14).
 
-1. Aucun compte, aucun identifiant, aucune adresse mail, aucun prénom demandé. Le profil élève est facultatif et se limite à un avatar choisi dans une liste (animal, couleur).
-2. Aucune donnée de progression ne quitte l'appareil. Stockage uniquement en IndexedDB local.
+1. Aucun compte nominatif, aucune adresse mail, aucun prénom demandé. L'élève est représenté par un avatar (animal, couleur), unique dans la classe, protégé par un code élève à 4 chiffres. La classe est identifiée par un code de classe de 6 caractères, saisi une fois par appareil.
+2. Le serveur ne stocke que : le code de classe, l'avatar, l'empreinte du code élève (jamais le code en clair) et l'état des cartes. IndexedDB reste la référence ; le serveur n'en est qu'une copie.
 3. Aucun script tiers : pas d'analytics, pas de police Google chargée à distance, pas de CDN au moment de l'usage. Toutes les ressources sont embarquées dans le site.
 4. Aucun cookie.
-5. Le Mode Classe n'émet aucune requête réseau après le chargement du paquet, sauf la mise à jour du site lui-même.
-6. En V2, la photo reste sur l'appareil. La reconnaissance du texte (OCR) se fait localement. Seul le texte relu part vers l'IA.
-7. Un bouton « Effacer toutes mes données » vide l'appareil en un geste.
-8. Une page « Confidentialité » en langage élève dit ce que l'app garde, où, et comment l'effacer.
+5. Aucune requête réseau hors du site lui-même et de la fonction de synchronisation. L'app reste entièrement utilisable hors ligne ; la synchronisation se fait au retour du réseau.
+6. Aucun accès direct aux tables depuis l'app : tout passe par une Edge Function. Après 5 codes élève faux, l'avatar est bloqué une heure.
+7. Code élève : saisi deux fois à la création, demandé à chaque ouverture ; chiffres tous identiques et 1234 refusés ; clavier à gros chiffres avec lecture vocale. L'atelier peut réinitialiser le code d'un avatar sans toucher à sa progression.
+8. En V2, la photo reste sur l'appareil. La reconnaissance du texte (OCR) se fait localement. Seul le texte relu part vers l'IA.
+9. « Effacer mes données » vide l'appareil en un geste et supprime aussi la progression sur le serveur. Toutes les données du serveur sont effacées automatiquement chaque 31 août.
+10. Une page « Confidentialité » en langage élève dit ce que l'app garde, où (appareil et serveur), et comment l'effacer.
 
 ## 4. Utilisateurs et contextes d'usage
 
@@ -51,7 +53,7 @@ Ces règles s'imposent au code. Vérifie-les à chaque étape. Chaque règle a u
 | Enseignante stagiaire | Son propre appareil | Jours de décharge | Distribuer un paquet existant, sans rien configurer |
 | Parent | Smartphone | Accompagnement ponctuel | Comprendre l'outil en une page |
 
-Un même iPad sert à plusieurs élèves. La progression est rangée par avatar, sur l'appareil. Si un élève change d'iPad, sa progression ne le suit pas. Choix assumé : aucune synchronisation, donc aucune collecte.
+Un même iPad sert à plusieurs élèves. La progression est rangée par avatar, sur l'appareil. Objectif de la synchronisation (lot 5 bis) : l'élève montre en classe le travail fait à la maison, et inversement. Sa progression le suit d'un appareil à l'autre grâce au code de classe, à son avatar et à son code élève.
 
 ## 5. Fonctionnalités V1 : Mode Classe
 
@@ -130,10 +132,12 @@ Ludification sobre : une plante qui pousse au fil des séances, par avatar. Pas 
 | Cibles | Safari iPadOS et iOS récents, Chrome Android, Safari macOS |
 | Installation | Manifeste web + icônes, installable via « Sur l'écran d'accueil » |
 | Hors ligne | Service worker : le site et les paquets déjà ouverts restent disponibles sans réseau |
-| Stockage | IndexedDB. Recommander l'installation sur l'écran d'accueil (Safari peut effacer les données d'un site non installé) |
+| Stockage | IndexedDB, qui reste la référence. Recommander l'installation sur l'écran d'accueil (Safari peut effacer les données d'un site non installé) |
+| Synchronisation | Projet Supabase gratuit, région Europe (Francfort). Une Edge Function unique, tables inaccessibles depuis l'app. Au retour du réseau, fusion carte par carte : la progression la plus avancée l'emporte (boîte la plus haute, puis révision la plus récente) |
+| Mise en pause | Le projet Supabase gratuit se met en pause après 7 jours sans activité : le relancer depuis le tableau de bord Supabase après chaque vacances |
 | Affichage | Portrait et paysage, du smartphone 6 pouces à l'iPad 13 pouces. Zones sûres respectées |
 | Poids | Moins de 2 Mo hors polices et modèle OCR. Chargement en moins de 3 secondes en 4G |
-| Hébergement | Statique, gratuit : GitHub Pages ou Netlify |
+| Hébergement | Statique, gratuit : GitHub Pages ou Netlify. Fonction de synchronisation sur Supabase |
 | Sauvegarde | Export et import manuel de la progression d'un avatar en fichier |
 
 ## 10. Format de données des paquets
@@ -185,17 +189,18 @@ Un paquet est un fichier JSON unique, rangé dans `paquets/` sous le nom `<id>.j
 }
 ```
 
-Champs du paquet (tous obligatoires, aucun autre accepté) :
+Champs du paquet (tous obligatoires sauf `accents`, aucun autre accepté) :
 
 | Champ | Règle |
 | --- | --- |
 | `version` | 1 |
 | `id` | Minuscules sans accent, chiffres, tirets. Identique au nom du fichier |
 | `titre` | Texte, 80 caractères maximum |
-| `discipline` | `histoire`, `geographie`, `sciences`, `vocabulaire`, `grammaire`, `conjugaison`, `calcul`, `geometrie`, `mesures` |
+| `discipline` | `histoire`, `geographie`, `sciences`, `grammaire`, `conjugaison`, `vocabulaire`, `nombres`, `calcul`, `grandeurs`, `geometrie`, `emc` |
 | `periode` | `P1` à `P10` |
-| `niveau` | `accompagné`, `standard`, `approfondi` |
+| `niveau` | `accompagne`, `standard`, `approfondi` (l'ancienne écriture `accompagné` reste acceptée) |
 | `relu` | Doit valoir `true`. Un paquet non relu est refusé par l'app |
+| `accents` | Facultatif, `false` par défaut. `false` : dans les textes à trous, les accents manquants sont acceptés mais la bonne orthographe s'affiche ; `true` : l'accent est exigé |
 | `fiche` | 5 à 8 idées clés. `**mot**` en gras, `*mot*` en italique |
 | `cartes` | Au moins une carte `{ "recto": …, "verso": … }` |
 | `quiz` | Au moins une question, d'un des 4 types ci-dessous |
@@ -206,16 +211,18 @@ Types de quiz (chacun a une `explication`, affichée après la réponse) :
 | --- | --- | --- |
 | `qcm` | `question`, `choix`, `reponse` | 3 choix différents. `reponse` : position de la bonne réponse, 0, 1 ou 2 |
 | `vraifaux` | `question`, `reponse` | `question` est une affirmation. `reponse` : `true` ou `false`, sans guillemets |
-| `trous` | `texte`, `reponse`, `accents` (facultatif) | `texte` contient une seule fois `___` (trois tirets bas). `reponse` : le mot manquant. Pas de champ `question`. `accents` : `false` par défaut, les accents manquants sont acceptés mais la bonne orthographe s'affiche ; `true`, l'accent est exigé |
+| `trous` | `texte`, `reponse`, `accents` (facultatif) | `texte` contient une seule fois `___` (trois tirets bas). `reponse` : le mot manquant. Pas de champ `question`. Un `accents` placé sur la question remplace celui du paquet pour cette question |
 | `ordre` | `question`, `elements` | 3 à 6 éléments différents, écrits dans le bon ordre. L'app les mélange |
 
-Aucun champ ne contient de donnée d'élève : tout champ inconnu fait refuser le paquet. Le projet fournit aussi le prompt de génération à coller dans Claude avec la leçon (phrases courtes, vocabulaire de la leçon, pas de piège).
+Aucun champ ne contient de donnée d'élève : tout champ inconnu fait refuser le paquet.
+
+Prompt de génération : il est intégré à l'atelier enseignant (bouton « Copier le prompt »), dans `atelier.js` (constante `PROMPT`), qui fait foi. Il produit exactement ce format, avec `"relu": false` : la relecture dans l'atelier coche chaque élément puis exporte le paquet avec `"relu": true`. Règles clés : uniquement le contenu de la leçon, phrases de 15 mots maximum, titre sans le nom de la discipline, aucun piège, une explication d'une phrase par question.
 
 ## 11. Écrans
 
 | Écran | Contenu | Côté |
 | --- | --- | --- |
-| Choix de l'avatar | 40 avatars possibles : 10 animaux déclinés en 4 couleurs. L'écran n'affiche que les avatars créés sur cet appareil, plus le bouton « Nouvel avatar ». Sur un même appareil, un avatar déjà pris ne peut plus être choisi | Élève |
+| Choix de l'avatar | 44 avatars possibles : 11 animaux (renard, panda, grenouille, hibou, tortue, dauphin, lion, lapin, hérisson, abeille, chat) déclinés en 4 couleurs (rouge, jaune, vert, bleu). Les avatars déjà créés ne changent pas. L'écran n'affiche que les avatars créés sur cet appareil, plus le bouton « Nouvel avatar ». Sur un même appareil, un avatar déjà pris ne peut plus être choisi | Élève |
 | Mes paquets | Paquets par discipline, pastille « cartes à revoir » | Élève |
 | Paquet | Trois gros boutons : Fiche, Cartes, Quiz | Élève |
 | Fiche | Idées clés, bouton haut-parleur par ligne | Élève |
@@ -232,7 +239,7 @@ Identité visuelle : tons sable, sobres, une couleur par discipline.
 ## 12. Hors périmètre
 
 - Tableau de bord enseignant des résultats par élève.
-- Synchronisation entre appareils, comptes, connexion ENT.
+- Comptes nominatifs, connexion ENT. (La synchronisation entre appareils est traitée au lot 5 bis, avec les seules données de la section 3.)
 - Classement, défis entre élèves, partage de scores.
 - Notifications et rappels.
 - Aide aux devoirs par chat avec l'IA côté élève.
@@ -250,15 +257,17 @@ Lots courts, chacun testé sur un vrai iPad avant le suivant. Ne passe jamais au
 | 3 | Quiz (4 types), bilan de séance | Les questions ratées reviennent en fin de quiz |
 | 4 | Accessibilité : Luciole, tailles, synthèse vocale, VoiceOver | Grille de la section 8 cochée |
 | 5 | Atelier enseignant, relecture, export, QR code, prompt de génération | Une leçon réelle devient un paquet en moins de 10 minutes |
+| 5 bis | Synchronisation : projet Supabase (Francfort), Edge Function, code de classe, code élève, avatars uniques dans la classe, fusion au retour du réseau, réinitialisation du code dans l'atelier, effacement sur le serveur, purge du 31 août | Un élève retrouve en classe la progression faite à la maison, et inversement ; 5 codes faux bloquent l'avatar une heure |
 | 6 | Test en classe sur 2 semaines, corrections | Retours intégrés |
 | 7 | V2 Mode Photo, si validée | OCR local et fonction relais sans journal |
 
 ## 14. Critères de recette
 
 - [ ] Mode avion : un paquet déjà ouvert se relit, se révise, et la progression s'enregistre.
-- [ ] Inspecteur réseau de Safari : aucune requête vers un autre domaine que celui du site.
+- [ ] Inspecteur réseau de Safari : aucune requête hors du site et de la fonction de synchronisation.
 - [ ] Aucun cookie, aucun traceur.
 - [ ] « Effacer toutes mes données » vide l'IndexedDB.
+- [ ] « Effacer mes données » supprime aussi la progression sur le serveur.
 - [ ] Un élève de CM2 lance une révision seul en moins de 30 secondes.
 - [ ] Deux avatars sur le même iPad ont des progressions séparées.
 - [ ] Un JSON mal formé est refusé avec un message clair.
@@ -273,4 +282,7 @@ Lots courts, chacun testé sur un vrai iPad avant le suivant. Ne passe jamais au
 - [ ] Information de l'IEN et mention au conseil des maîtres.
 - [ ] Conservation de l'IndexedDB sur iPadOS pour une PWA installée, à tester sur le parc réel.
 - [ ] Licence de la police Luciole pour l'embarquement dans un site.
+- [ ] Crédit de la police Luciole dans la page Confidentialité.
 - [ ] Qualité de Tesseract.js sur une écriture de cahier CM2, avant le lot 7.
+- [ ] Information des familles sur l'ENT.
+- [ ] Synchronisation : avis du DPD de l'académie avant la mise en service en classe.

@@ -3,7 +3,7 @@
 // Lecteur élève et atelier enseignant minimal.
 // Écrans : #/ (avatar puis paquets), #/avatars, #/avatar/nouveau, #/paquets,
 // #/paquet/ID, #/paquet/ID/fiche, #/paquet/ID/cartes, #/paquet/ID/quiz,
-// #/reglages, #/confidentialite, #/atelier (caché).
+// #/reglages, #/confidentialite, #/p/ID (lien court), #/atelier… (caché, voir atelier.js).
 // Aucun cookie, aucune requête hors du site.
 
 (function () {
@@ -13,23 +13,25 @@
   const Q = window.Quiz;
   const VX = window.Voix;
   const app = document.getElementById('app');
-  const VERSION_APP = '0.4.2';
+  const VERSION_APP = '0.5.1';
 
   const DISCIPLINES = {
     histoire: { nom: 'Histoire', icone: '🏰' },
     geographie: { nom: 'Géographie', icone: '🗺️' },
     sciences: { nom: 'Sciences', icone: '🔬' },
-    vocabulaire: { nom: 'Vocabulaire', icone: '📖' },
     grammaire: { nom: 'Grammaire', icone: '✏️' },
     conjugaison: { nom: 'Conjugaison', icone: '⏳' },
-    calcul: { nom: 'Calcul', icone: '🔢' },
+    vocabulaire: { nom: 'Vocabulaire', icone: '📖' },
+    nombres: { nom: 'Nombres', icone: '🔢' },
+    calcul: { nom: 'Calcul', icone: '➗' },
+    grandeurs: { nom: 'Grandeurs et mesures', icone: '📏' },
     geometrie: { nom: 'Géométrie', icone: '📐' },
-    mesures: { nom: 'Grandeurs et mesures', icone: '📏' }
+    emc: { nom: 'EMC', icone: '🤝' }
   };
 
-  const NIVEAUX = { 'accompagné': 'Accompagné', standard: 'Standard', approfondi: 'Approfondi' };
+  const NIVEAUX = { accompagne: 'Accompagné', 'accompagné': 'Accompagné', standard: 'Standard', approfondi: 'Approfondi' };
 
-  // 40 avatars : 10 animaux (f = féminin, pour accorder la couleur) × 4 couleurs.
+  // 44 avatars : 11 animaux (f = féminin, pour accorder la couleur) × 4 couleurs.
   const ANIMAUX = {
     renard: { nom: 'Renard', icone: '🦊' },
     panda: { nom: 'Panda', icone: '🐼' },
@@ -40,7 +42,8 @@
     lion: { nom: 'Lion', icone: '🦁' },
     lapin: { nom: 'Lapin', icone: '🐰' },
     herisson: { nom: 'Hérisson', icone: '🦔' },
-    abeille: { nom: 'Abeille', icone: '🐝', f: true }
+    abeille: { nom: 'Abeille', icone: '🐝', f: true },
+    chat: { nom: 'Chat', icone: '🐱' }
   };
   const COULEURS = {
     rouge: { m: 'rouge', f: 'rouge' },
@@ -79,7 +82,6 @@
   let avatarCourant = null;     // avatar choisi pour cette ouverture de l'app
   let stockageOk = true;        // faux en navigation privée ou si IndexedDB est bloqué
   let decalageJours = 0;        // date de test, réglée dans l'atelier
-  let atelierOuvert = false;    // code saisi pendant cette ouverture de l'app
   let apresAvatar = null;       // écran à rouvrir une fois l'avatar choisi
 
   // Réglages d'affichage et de voix, propres à chaque avatar (iPad partagé).
@@ -187,11 +189,14 @@
     if (!VX.disponible()) return;
     A_LIRE.forEach(function (paire) {
       racine.querySelectorAll(paire[0]).forEach(function (el) {
-        if (el.querySelector(':scope > .lire')) return;
+        if (el.classList.contains('a-lecture')) return;
         const texte = el.dataset.lire || texteVisible(el);
         if (!texte.trim()) return;
         el.classList.add('a-lecture');
-        el.insertAdjacentHTML('beforeend', boutonLire(texte, paire[1]));
+        // Juste après la phrase lue : dans le dernier paragraphe quand il y en a plusieurs.
+        const dernier = el.lastElementChild;
+        const cible = dernier && /^(P|LI)$/.test(dernier.tagName) ? dernier : el;
+        cible.insertAdjacentHTML('beforeend', ' ' + boutonLire(texte, paire[1]));
       });
     });
   }
@@ -201,7 +206,9 @@
     if (bouton) VX.lire(bouton.dataset.lire);
   });
 
-  function afficher(html, titre) {
+  // options.large : page plus large (grille de « Mes paquets »).
+  function afficher(html, titre, options) {
+    app.classList.toggle('page-large', !!(options && options.large));
     app.innerHTML = html;
     ajouterLecture(app);
     document.title = titre ? titre + ' – Révision CM2' : 'Révision CM2';
@@ -407,7 +414,7 @@
   }
 
   function ecranAccueil(encoreActuel) {
-    afficher('<h1>Mes paquets</h1><p class="chargement">Chargement…</p>', 'Mes paquets');
+    afficher('<h1>Mes paquets</h1><p class="chargement">Chargement…</p>', 'Mes paquets', { large: true });
 
     chargerListe()
       .then(function (resultats) {
@@ -437,21 +444,25 @@
           html += '<p class="info">Aucun paquet disponible pour l\'instant.</p>';
         } else {
           html += '<p class="consigne">Choisis un paquet.</p>';
-          Object.keys(DISCIPLINES).forEach(function (cle) {
-            const duGroupe = d.valides.filter(function (r) { return r.paquet.discipline === cle; });
-            if (duGroupe.length === 0) return;
-            const disc = DISCIPLINES[cle];
-            html += '<section class="groupe"><h2><span aria-hidden="true">' + disc.icone + '</span> ' + disc.nom + '</h2><ul class="liste-paquets">';
-            duGroupe.forEach(function (r) {
-              const n = d.aRevoir[r.id] || 0;
-              html += '<li><a class="carte-paquet" data-discipline="' + cle + '" href="#/paquet/' + r.id + '">' +
-                '<span class="carte-titre">' + echapper(r.paquet.titre) + '</span>' +
-                '<span class="carte-infos">Période ' + r.paquet.periode.slice(1) + ' · ' + NIVEAUX[r.paquet.niveau] + '</span>' +
-                (n > 0 ? '<span class="pastille">' + n + (n > 1 ? ' cartes' : ' carte') + ' à revoir</span>' : '') +
-                '</a></li>';
-            });
-            html += '</ul></section>';
+          // Une seule grille, classée par discipline : chaque carte porte l'icône et le nom de sa discipline.
+          const ordre = Object.keys(DISCIPLINES);
+          const tries = d.valides.slice().sort(function (a, b) {
+            return ordre.indexOf(a.paquet.discipline) - ordre.indexOf(b.paquet.discipline) ||
+              a.paquet.periode.slice(1) - b.paquet.periode.slice(1);
           });
+          html += '<ul class="liste-paquets">';
+          tries.forEach(function (r) {
+            const cle = r.paquet.discipline;
+            const disc = DISCIPLINES[cle];
+            const n = d.aRevoir[r.id] || 0;
+            html += '<li><a class="carte-paquet" data-discipline="' + cle + '" href="#/paquet/' + r.id + '">' +
+              '<span class="carte-discipline"><span aria-hidden="true">' + disc.icone + '</span> ' + disc.nom + '</span>' +
+              '<span class="carte-titre">' + echapper(r.paquet.titre) + '</span>' +
+              '<span class="carte-infos">Période ' + r.paquet.periode.slice(1) + ' · ' + NIVEAUX[r.paquet.niveau] + '</span>' +
+              (n > 0 ? '<span class="pastille">' + n + (n > 1 ? ' cartes' : ' carte') + ' à revoir</span>' : '') +
+              '</a></li>';
+          });
+          html += '</ul>';
         }
 
         // Signalé discrètement pour l'enseignant.
@@ -460,7 +471,7 @@
         });
 
         html += piedDePage();
-        afficher(html, 'Mes paquets');
+        afficher(html, 'Mes paquets', { large: true });
       })
       .catch(function () {
         if (!encoreActuel()) return;
@@ -468,7 +479,8 @@
           '<h1>Mes paquets</h1>' + enteteAvatar() +
           '<p class="consigne">Connecte-toi à Internet une première fois pour voir les paquets.</p>' +
           piedDePage(),
-          'Mes paquets'
+          'Mes paquets',
+          { large: true }
         );
       });
   }
@@ -610,8 +622,8 @@
       let html =
         '<div class="carte retournee">' +
         '<p class="carte-recto">' + avecGras(carte.recto) + '</p>' +
-        '<p class="carte-texte" id="verso" tabindex="-1">' + avecGras(carte.verso) + '</p>' +
-        '<div class="lire-carte">' + boutonLire(carte.verso, 'Écouter la réponse') + '</div></div>' +
+        '<p class="carte-texte" id="verso" tabindex="-1">' + avecGras(carte.verso) + ' ' +
+        boutonLire(carte.verso, 'Écouter la réponse') + '</p></div>' +
         '<p class="consigne">Dis si tu savais la réponse.</p><div class="notes">';
       Object.keys(NOTES).forEach(function (n) {
         html += '<button class="note" type="button" data-note="' + n + '">' +
@@ -870,7 +882,8 @@
     }
 
     function valider(q, reponse) {
-      const res = Q.corriger(q, reponse);
+      // « accents » de la question, sinon celui du paquet (false par défaut).
+      const res = Q.corriger('accents' in q ? q : Object.assign({}, q, { accents: p.accents === true }), reponse);
       const reviendra = Q.repondre(d, res.juste);
 
       // Plus de réponse possible : on montre la correction sur place.
@@ -1076,107 +1089,26 @@
     );
   }
 
-  // ---------- Atelier enseignant (minimal) ----------
+  // ---------- Atelier enseignant (atelier.js) ----------
 
-  function ecranAtelier(encoreActuel) {
-    if (!stockageOk) {
-      afficher(lienRetour('#/', 'Quitter') + '<h1>Atelier enseignant</h1><p>Le stockage de cet appareil est indisponible.</p>', 'Atelier');
-      return;
-    }
-    if (atelierOuvert) { ecranAtelierOuvert(); return; }
-
-    S.lireReglage('codeAtelier', null).then(function (code) {
-      if (!encoreActuel()) return;
-      const creation = code === null;
-      const champ = function (idChamp, libelle) {
-        return '<label class="champ" for="' + idChamp + '">' + libelle + '</label>' +
-          '<input class="code" id="' + idChamp + '" type="password" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]*">';
-      };
-      afficher(
-        lienRetour('#/', 'Quitter') +
-        '<h1>Atelier enseignant</h1>' +
-        (creation
-          ? '<p>Crée un code à 4 chiffres. C\'est un garde-fou pour les élèves, pas une sécurité.</p>' +
-            champ('code1', 'Nouveau code') + champ('code2', 'Répète le code')
-          : champ('code1', 'Code de l\'atelier')) +
-        '<p class="message" id="message" role="alert"></p>' +
-        '<button class="bouton" type="button" id="valider">' + (creation ? 'Enregistrer' : 'Ouvrir') + '</button>' +
-        (creation ? '' : '<p class="note-discrete">Code oublié : supprimer l\'app de l\'écran d\'accueil efface toutes ses données, code compris.</p>'),
-        'Atelier'
-      );
-      const message = document.getElementById('message');
-      const code1 = document.getElementById('code1');
-      code1.focus();
-
-      function valider() {
-        const v1 = code1.value;
-        if (creation) {
-          const v2 = document.getElementById('code2').value;
-          if (!/^[0-9]{4}$/.test(v1)) { message.textContent = 'Le code doit avoir 4 chiffres.'; return; }
-          if (v1 !== v2) { message.textContent = 'Les deux codes sont différents.'; return; }
-          S.ecrireReglage('codeAtelier', v1).then(function () {
-            atelierOuvert = true;
-            ecranAtelierOuvert();
-          });
-        } else if (v1 === code) {
-          atelierOuvert = true;
-          ecranAtelierOuvert();
-        } else {
-          message.textContent = 'Code incorrect.';
-          code1.value = '';
-          code1.focus();
-        }
-      }
-      document.getElementById('valider').addEventListener('click', valider);
-      app.querySelectorAll('.code').forEach(function (c) {
-        c.addEventListener('keydown', function (e) { if (e.key === 'Enter') valider(); });
-      });
-    });
-  }
-
-  function ecranAtelierOuvert() {
-    afficher(
-      '<h1>Atelier enseignant</h1>' +
-      '<section class="bloc"><h2>Date de test</h2>' +
-      '<p>Date utilisée par l\'app : <strong>' + dateLisible(aujourdhui()) + '</strong><br>' +
-      (decalageJours === 0
-        ? 'C\'est la vraie date.'
-        : '<span class="alerte">Vraie date + ' + decalageJours + (decalageJours > 1 ? ' jours' : ' jour') + '.</span>') +
-      '</p>' +
-      '<p class="note-discrete">Sert à tester la répétition espacée. Les élèves ne voient pas ce réglage : pense à revenir à la vraie date.</p>' +
-      '<div class="boutons-ligne">' +
-      '<button class="bouton" type="button" id="avancer">Avancer d\'un jour</button>' +
-      '<button class="bouton secondaire" type="button" id="vraie-date"' + (decalageJours === 0 ? ' disabled' : '') + '>Revenir à la vraie date</button>' +
-      '</div></section>' +
-      '<section class="bloc"><h2>Données de l\'appareil</h2>' +
-      '<p>Efface tous les avatars, toute la progression, le code de l\'atelier et la date de test.</p>' +
-      '<button class="bouton danger" type="button" id="effacer">Effacer toutes les données</button></section>' +
-      '<button class="bouton secondaire" type="button" id="fermer">Fermer l\'atelier</button>',
-      'Atelier'
-    );
-
-    function changerDecalage(n) {
-      S.ecrireReglage('decalageJours', n).then(function () {
-        decalageJours = n;
-        ecranAtelierOuvert();
-      });
-    }
-    document.getElementById('avancer').addEventListener('click', function () { changerDecalage(decalageJours + 1); });
-    document.getElementById('vraie-date').addEventListener('click', function () { changerDecalage(0); });
-    document.getElementById('effacer').addEventListener('click', function () {
-      if (!window.confirm('Effacer tous les avatars et toute la progression de cet appareil ? C\'est définitif.')) return;
-      S.toutEffacer().catch(function () {}).then(function () {
-        memoriserAvatar(null);
-        decalageJours = 0;
-        atelierOuvert = false;
-        location.hash = '#/';
-      });
-    });
-    document.getElementById('fermer').addEventListener('click', function () {
-      atelierOuvert = false;
-      location.hash = '#/';
-    });
-  }
+  const atelier = window.Atelier.installer({
+    app: app,
+    afficher: afficher,
+    lienRetour: lienRetour,
+    echapper: echapper,
+    avecGras: avecGras,
+    S: S,
+    V: V,
+    DISCIPLINES: DISCIPLINES,
+    chargerPaquet: chargerPaquet,
+    chargerListe: chargerListe,
+    stockageOk: function () { return stockageOk; },
+    getDecalage: function () { return decalageJours; },
+    setDecalage: function (n) { decalageJours = n; },
+    aujourdhui: aujourdhui,
+    dateLisible: dateLisible,
+    reinitialiser: function () { memoriserAvatar(null); decalageJours = 0; }
+  });
 
   // ---------- Navigation ----------
 
@@ -1185,6 +1117,9 @@
     const numero = ++ecranCourant;
     const encoreActuel = function () { return numero === ecranCourant; };
     const morceaux = (location.hash.replace(/^#\/?/, '') || '').split('/');
+
+    // #/p/ID : lien court des QR codes
+    if (morceaux[0] === 'p' && morceaux[1]) morceaux[0] = 'paquet';
 
     if (morceaux[0] === 'paquet' && morceaux[1]) {
       const id = decodeURIComponent(morceaux[1]);
@@ -1203,7 +1138,7 @@
     } else if (morceaux[0] === 'confidentialite') {
       ecranConfidentialite();
     } else if (morceaux[0] === 'atelier') {
-      ecranAtelier(encoreActuel);
+      atelier.router(morceaux.slice(1), encoreActuel);
     } else if (avatarCourant || !stockageOk) {
       ecranAccueil(encoreActuel);
     } else {
