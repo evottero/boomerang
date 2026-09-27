@@ -10,7 +10,7 @@
   const M = window.Moteur;
   const S = window.Stockage;
   const app = document.getElementById('app');
-  const VERSION_APP = '0.2.0';
+  const VERSION_APP = '0.2.1';
 
   const DISCIPLINES = {
     histoire: { nom: 'Histoire', icone: '🏰' },
@@ -733,6 +733,14 @@
   // ---------- Hors ligne ----------
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js', { scope: './' }).catch(function () {});
+    // updateViaCache: 'none' : sw.js est toujours vérifié en ligne, jamais pris dans le cache HTTP.
+    navigator.serviceWorker.register('sw.js', { scope: './', updateViaCache: 'none' })
+      .then(function (inscription) {
+        // Sur iPad, l'app revient souvent du fond sans se recharger : on vérifie alors la mise à jour.
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') inscription.update().catch(function () {});
+        });
+      })
+      .catch(function () {});
   }
 })();

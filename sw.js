@@ -1,8 +1,10 @@
 'use strict';
 
-// Service worker : met le site en cache pour qu'il fonctionne sans réseau.
-// Change VERSION à chaque mise en ligne pour forcer la mise à jour du cache.
-const VERSION = 'v0.2.0';
+// Service worker : fait fonctionner le site sans réseau.
+// Avec le réseau, l'app prend toujours la dernière version en ligne ;
+// le cache ne sert que hors ligne ou si le réseau est trop lent.
+// Change VERSION à chaque mise en ligne pour renouveler la copie hors ligne.
+const VERSION = 'v0.2.1';
 const CACHE = 'revision-cm2-' + VERSION;
 // Les paquets ouverts ont leur propre cache, conservé d'une version à l'autre.
 const CACHE_PAQUETS = 'revision-cm2-paquets';
@@ -60,32 +62,35 @@ self.addEventListener('activate', function (event) {
   );
 });
 
-// Paquets : réseau d'abord (pour avoir la dernière version de l'enseignant),
-// copie en cache si pas de réseau ou réseau trop lent.
-function paquet(requete) {
-  const cle = requete.url;
-  return caches.open(CACHE_PAQUETS).then(function (cache) {
+// Réseau d'abord : la version en ligne si elle arrive à temps, sinon la copie en cache.
+// cle : l'entrée du cache à lire et à mettre à jour. page : vrai pour la page HTML.
+function reseauDabord(url, nomCache, cle, page) {
+  return caches.open(nomCache).then(function (cache) {
     return new Promise(function (resoudre, rejeter) {
       let fini = false;
       function servir(reponse) {
         if (!fini) { fini = true; resoudre(reponse); }
       }
+      function copie() {
+        return cache.match(cle, { ignoreSearch: true }).then(nettoyer);
+      }
 
       const minuteur = setTimeout(function () {
-        cache.match(cle).then(function (copie) { if (copie) servir(copie); });
+        copie().then(function (c) { if (c) servir(c); });
       }, DELAI_RESEAU);
 
-      fetch(cle, { cache: 'no-cache' })
+      // no-cache : revalide auprès du serveur au lieu de reprendre le cache HTTP (10 min sur GitHub Pages).
+      fetch(url, { cache: 'no-cache' })
         .then(function (reponse) {
           clearTimeout(minuteur);
-          if (reponse.ok) cache.put(cle, reponse.clone());
-          else if (reponse.status === 404) cache.delete(cle);
-          servir(reponse);
+          if (reponse.ok && !reponse.redirected) cache.put(cle, reponse.clone());
+          else if (reponse.status === 404 && !page) cache.delete(cle);
+          servir(page ? nettoyer(reponse) : reponse);
         })
         .catch(function () {
           clearTimeout(minuteur);
-          cache.match(cle).then(function (copie) {
-            if (copie) servir(copie);
+          copie().then(function (c) {
+            if (c) servir(c);
             else if (!fini) { fini = true; rejeter(new Error('hors ligne')); }
           });
         });
@@ -101,43 +106,11 @@ self.addEventListener('fetch', function (event) {
   const url = new URL(requete.url);
   if (url.origin !== self.location.origin) return;
 
-  // Pages : réseau d'abord (pour recevoir les mises à jour), cache si hors ligne.
   if (requete.mode === 'navigate') {
-    event.respondWith(
-      fetch(requete)
-        .then(function (reponse) {
-          // Safari refuse de servir une réponse redirigée : on ne garde que les réponses directes.
-          if (reponse.ok && !reponse.redirected) {
-            const copie = reponse.clone();
-            caches.open(CACHE).then(function (cache) { cache.put('index.html', copie); });
-          }
-          return reponse;
-        })
-        .catch(function () {
-          return caches.match('index.html', { ignoreSearch: true })
-            .then(function (enCache) { return enCache || caches.match('./', { ignoreSearch: true }); })
-            .then(nettoyer);
-        })
-    );
-    return;
+    event.respondWith(reseauDabord(requete.url, CACHE, 'index.html', true));
+  } else if (url.pathname.indexOf('/paquets/') !== -1 && url.pathname.endsWith('.json')) {
+    event.respondWith(reseauDabord(requete.url, CACHE_PAQUETS, requete.url, false));
+  } else {
+    event.respondWith(reseauDabord(requete.url, CACHE, requete.url, false));
   }
-
-  if (url.pathname.indexOf('/paquets/') !== -1 && url.pathname.endsWith('.json')) {
-    event.respondWith(paquet(requete));
-    return;
-  }
-
-  // Autres fichiers : cache d'abord, puis réseau (et mise en cache au passage).
-  event.respondWith(
-    caches.match(requete).then(function (enCache) {
-      if (enCache) return enCache;
-      return fetch(requete).then(function (reponse) {
-        if (reponse.ok) {
-          const copie = reponse.clone();
-          caches.open(CACHE).then(function (cache) { cache.put(requete, copie); });
-        }
-        return reponse;
-      });
-    })
-  );
 });
