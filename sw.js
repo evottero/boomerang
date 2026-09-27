@@ -2,7 +2,7 @@
 
 // Service worker : met le site en cache pour qu'il fonctionne sans réseau.
 // Change VERSION à chaque mise en ligne pour forcer la mise à jour du cache.
-const VERSION = 'v0.1.1';
+const VERSION = 'v0.2.0';
 const CACHE = 'revision-cm2-' + VERSION;
 // Les paquets ouverts ont leur propre cache, conservé d'une version à l'autre.
 const CACHE_PAQUETS = 'revision-cm2-paquets';
@@ -14,6 +14,8 @@ const FICHIERS = [
   'index.html',
   'styles.css',
   'validation.js',
+  'moteur.js',
+  'stockage.js',
   'app.js',
   'manifest.webmanifest',
   'icons/favicon.svg',

@@ -1,4 +1,4 @@
-// Tests du validateur de paquets. Lancer depuis la racine du dépôt : node --test tests/
+// Tests du validateur de paquets. Lancer depuis la racine du dépôt : node --test tests/*.test.js
 'use strict';
 
 const test = require('node:test');
