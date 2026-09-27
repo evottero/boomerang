@@ -41,10 +41,21 @@ test('prompt : toutes ses disciplines sont acceptées par le validateur', functi
   liste.forEach(function (d) { assert.ok(V.DISCIPLINES.indexOf(d) !== -1, d); });
 });
 
-test('import : balises de code tolérées, JSON cassé refusé avec un message clair', function () {
+test('coller la réponse : balises de code tolérées, messages clairs sinon', function () {
   assert.strictEqual(A.extraireJSON(REPONSE_CLAUDE).id, 'conj-passe-compose');
-  assert.throws(function () { A.extraireJSON('Voici le paquet : { "version": 1, }'); }, /pas valide/);
-  assert.throws(function () { A.extraireJSON('Désolé, je ne peux pas.'); }, /Aucun objet JSON/);
+  assert.throws(function () { A.extraireJSON('Voici le paquet : { "version": 1, }'); }, /pas un JSON valide/);
+  assert.throws(function () { A.extraireJSON('Désolé, je ne peux pas.'); }, /ne contient pas de paquet/);
+  assert.throws(function () { A.extraireJSON(''); }, /ne contient pas de paquet/);
+});
+
+test('coller la réponse : un JSON coupé est signalé comme incomplet', function () {
+  const complet = REPONSE_CLAUDE.replace(/```/g, '');
+  [complet.length - 5, Math.floor(complet.length / 2), 120].forEach(function (n) {
+    assert.throws(function () { A.extraireJSON(complet.slice(0, n)); }, /incomplète/, 'coupé à ' + n);
+  });
+  // Accolades dans une chaîne : pas de fausse alerte
+  assert.strictEqual(A.profondeurFinale('{"a": "texte avec { et [ dedans"}'), 0);
+  assert.ok(A.profondeurFinale('{"a": "chaîne non fermée') > 0);
 });
 
 test('relecture : un paquet importé part décoché, et une fois tout relu il est conforme', function () {
@@ -111,4 +122,27 @@ test('QR code : SVG autonome, sans aucune ressource externe', function () {
   const svg = QR.svg('https://exemple.test/#/p/abc', { libelle: 'QR' });
   assert.ok(/^<svg /.test(svg));
   assert.ok(!/href|url\(|<image/.test(svg));
+});
+
+test('libellés du plan (lot 5 ter) : présents à l\'identique et dans l\'ordre', function () {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'atelier.js'), 'utf8');
+  const position = function (motif) {
+    const i = source.indexOf(motif);
+    assert.ok(i !== -1, 'libellé absent : ' + motif);
+    return i;
+  };
+  // Accueil de l'atelier : « Nouveau paquet » puis la liste « Mes paquets »
+  assert.ok(position('id="nouveau-paquet">Nouveau paquet</button>') < position('<h2>Mes paquets</h2><p>Chargement'));
+  // Écran « Nouveau paquet » : menus, cadre de la leçon, les deux boutons Claude
+  const ecran = [
+    'data-menu="discipline"', 'data-menu="periode"', 'data-menu="niveau"', 'id="lecon"',
+    '>Copier pour Claude</button>', '>Coller la réponse de Claude</button>'
+  ].map(position);
+  ecran.slice(1).forEach(function (p, i) { assert.ok(p > ecran[i], 'ordre de l\'écran Nouveau paquet'); });
+  // Relecture : « Relu », corbeille, puis « Publier »
+  assert.ok(position('data-relu aria-pressed=') > 0);
+  assert.ok(position('corbeille') > 0);
+  assert.ok(position('data-action="publier"') > 0);
+  assert.ok(/data-action="publier"[^>]*>Publier<\/button>/.test(source.replace(/' \+ \(peut \? '' : ' disabled'\) \+ '/, '')), 'bouton « Publier »');
+  assert.ok(/>Relu<\/button>/.test(source), 'bouton « Relu »');
 });

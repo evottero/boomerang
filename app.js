@@ -14,7 +14,7 @@
   const VX = window.Voix;
   const SY = window.Synchro;
   const app = document.getElementById('app');
-  const VERSION_APP = '0.6.2';
+  const VERSION_APP = '0.7.0';
 
   const DISCIPLINES = {
     histoire: { nom: 'Histoire', icone: '🏰' },
@@ -256,10 +256,46 @@
 
   // ---------- Chargement des paquets ----------
 
+  // ---------- Paquets de la classe (lot 5 ter) ----------
+  // Sur un appareil avec classe, les élèves ne voient que les paquets publiés pour leur classe.
+  // Ils sont gardés sur l'appareil : ceux déjà chargés restent disponibles hors ligne.
+
+  function avecPaquetsClasse() {
+    return SY.active() && stockageOk && !!classeAppareil;
+  }
+
+  function resultatPaquet(id, contenu) {
+    const erreurs = V.validerPaquet(contenu, id);
+    return erreurs.length ? { id: id, erreurs: erreurs } : { id: id, paquet: contenu };
+  }
+
+  function rafraichirPaquetsClasse() {
+    const classe = classeAppareil;
+    return SY.appeler('paquets', { classe: classe }).then(function (r) {
+      if (r.statut === 200 && Array.isArray(r.corps.paquets)) {
+        return S.remplacerPaquetsClasse(classe, r.corps.paquets).catch(function () {}).then(function () {
+          return r.corps.paquets;
+        });
+      }
+      return S.paquetsClasse(classe); // hors ligne : la réserve de l'appareil
+    });
+  }
+
   function chargerPaquet(id) {
     if (!V.ID_VALIDE.test(id)) {
       return Promise.resolve({ id: id, erreurs: ['Le nom du paquet dans le lien n\'est pas valide.'] });
     }
+    if (!avecPaquetsClasse()) return chargerPaquetFichier(id);
+    return S.lirePaquet(classeAppareil, id).then(function (p) {
+      if (p) return resultatPaquet(id, p);
+      return rafraichirPaquetsClasse()
+        .then(function () { return S.lirePaquet(classeAppareil, id); })
+        .then(function (p2) { return p2 ? resultatPaquet(id, p2) : chargerPaquetFichier(id); });
+    }).catch(function () { return chargerPaquetFichier(id); });
+  }
+
+  // Paquet du dossier paquets/ du site (appareil sans classe, ou lien vers un fichier).
+  function chargerPaquetFichier(id) {
     return fetch('paquets/' + id + '.json')
       .then(function (reponse) {
         if (reponse.status === 404) return { id: id, erreurs: ['Ce paquet n\'existe pas. Vérifie le lien.'] };
@@ -275,6 +311,15 @@
   }
 
   function chargerListe() {
+    if (avecPaquetsClasse()) {
+      return rafraichirPaquetsClasse().then(function (liste) {
+        return liste.map(function (p) { return resultatPaquet(p.id, p); });
+      });
+    }
+    return chargerListeFichiers();
+  }
+
+  function chargerListeFichiers() {
     return fetch('paquets/index.json')
       .then(function (reponse) {
         if (!reponse.ok) throw new Error('liste');
@@ -282,7 +327,7 @@
       })
       .then(function (liste) {
         if (!liste || !Array.isArray(liste.paquets)) throw new Error('liste');
-        return Promise.all(liste.paquets.map(chargerPaquet));
+        return Promise.all(liste.paquets.map(chargerPaquetFichier));
       });
   }
 
@@ -1479,6 +1524,8 @@
     DISCIPLINES: DISCIPLINES,
     chargerPaquet: chargerPaquet,
     chargerListe: chargerListe,
+    chargerListeFichiers: chargerListeFichiers,
+    enregistrerPaquetClasse: function (classe, contenu) { return S.enregistrerPaquet(classe, contenu); },
     stockageOk: function () { return stockageOk; },
     getDecalage: function () { return decalageJours; },
     setDecalage: function (n) { decalageJours = n; },

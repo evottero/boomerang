@@ -7,7 +7,12 @@
 -- l'empreinte), « essais_faux » et « bloque_jusqua » (blocage d'une heure après 5 codes faux).
 
 create table if not exists public.classes (
-  code text primary key check (code ~ '^[A-HJ-NP-Z2-9]{6}$')
+  code text primary key check (code ~ '^[A-HJ-NP-Z2-9]{6}$'),
+  -- Code enseignant de la classe (lot 5 ter) : empreinte seulement, jamais le code en clair.
+  empreinte_enseignant     text,
+  sel_enseignant           text,
+  essais_faux_enseignant   smallint not null default 0,
+  bloque_enseignant_jusqua timestamptz
 );
 
 create table if not exists public.avatars (
@@ -34,12 +39,21 @@ create table if not exists public.cartes (
   foreign key (classe, avatar) references public.avatars(classe, avatar) on delete cascade
 );
 
+-- Paquets publiés par l'enseignant pour sa classe (lot 5 ter) : contenu pédagogique, aucune donnée d'élève.
+create table if not exists public.paquets (
+  classe  text not null references public.classes(code) on delete cascade,
+  id      text not null check (id ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(id) <= 60),
+  contenu jsonb not null,
+  primary key (classe, id)
+);
+
 -- Aucun accès direct depuis l'app : sécurité par ligne activée, aucune règle d'accès.
 -- Seule l'Edge Function, avec la clé de service, lit et écrit.
 alter table public.classes enable row level security;
 alter table public.avatars enable row level security;
 alter table public.cartes  enable row level security;
-revoke all on public.classes, public.avatars, public.cartes from anon, authenticated;
+alter table public.paquets enable row level security;
+revoke all on public.classes, public.avatars, public.cartes, public.paquets from anon, authenticated;
 
 -- Effacement automatique de toutes les données chaque 31 août à 3 h (heure UTC).
 -- Supprimer les classes supprime en cascade les avatars et les cartes.

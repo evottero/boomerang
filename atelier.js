@@ -62,6 +62,10 @@ Leçon :
     let brouillon = null;       // paquet en cours de relecture (modèle d'édition)
     let dernierExport = null;   // { id, json, index }
     let minuteurSauvegarde = null;
+    let enseignant = null;          // { classe, code } : connexion enseignant de cet appareil (lot 5 ter)
+    let pageNouveau = null;         // { discipline, periode, niveau, lecon } : écran « Nouveau paquet »
+    let minuteurPage = null;
+    let dernierePublication = null; // { id, classe } : pour le message sous le QR code
 
     // ---------- Outils ----------
 
@@ -98,13 +102,22 @@ Leçon :
 
     function copier(texte, zoneSecours) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        return navigator.clipboard.writeText(texte).catch(function () { return copierSecours(zoneSecours); });
+        return navigator.clipboard.writeText(texte).catch(function () { return copierSecours(zoneSecours, texte); });
       }
-      return copierSecours(zoneSecours);
+      return copierSecours(zoneSecours, texte);
     }
 
-    function copierSecours(zone) {
-      if (!zone) return Promise.reject(new Error('copie impossible'));
+    function copierSecours(zone, texte) {
+      if (!zone) {
+        const tmp = document.createElement('textarea');
+        tmp.value = texte || '';
+        tmp.setAttribute('readonly', '');
+        tmp.className = 'cache';
+        document.body.appendChild(tmp);
+        const r = copierSecours(tmp);
+        tmp.remove();
+        return r;
+      }
       zone.removeAttribute('readonly');
       zone.select();
       const ok = document.execCommand('copy');
@@ -275,60 +288,75 @@ Leçon :
 
     // ---------- Accueil de l'atelier ----------
 
+    function chargerEnseignant() {
+      return c.S.lireReglage('enseignant', null).then(function (e) {
+        enseignant = e && e.classe && e.code ? e : null;
+        return enseignant;
+      });
+    }
+
+    function connecte() {
+      return c.SY.active() && !!enseignant;
+    }
+
+    function minutes(jusqua) {
+      return Math.max(1, Math.ceil((Date.parse(jusqua) - Date.now()) / 60000));
+    }
+
+    // Message clair pour une réponse du serveur aux actions enseignant.
+    function messageServeur(r) {
+      if (r.statut === 0) return 'Connecte-toi à Internet, puis réessaie.';
+      if (r.statut === 401) return 'Code enseignant faux. Il reste ' + r.corps.restants + ' essai' + (r.corps.restants > 1 ? 's' : '') + '.';
+      if (r.statut === 423) return 'Trop d\'essais : réessaie dans ' + minutes(r.corps.jusqua) + ' minutes.';
+      if (r.statut === 403 && r.corps.erreur === 'sans-code-enseignant') {
+        return 'Cette classe n\'a pas encore de code enseignant : définis-le dans « Administration », plus bas.';
+      }
+      if (r.statut === 403) return 'Clé d\'administration refusée.';
+      if (r.statut === 404) return 'Ce code de classe n\'existe pas.';
+      if (r.statut === 400 && r.corps.erreur === 'code-enseignant-court') return 'Le code enseignant fait au moins 12 caractères.';
+      if (r.statut === 400 && r.corps.erreur === 'paquet') return 'Le serveur a refusé ce paquet.';
+      return 'Un problème est survenu. Réessaie.';
+    }
+
     function ecranAccueil(encoreActuel) {
-      Promise.all([chargerBrouillon(), c.chargerListe().catch(function () { return null; })]).then(function (r) {
+      Promise.all([chargerBrouillon(), chargerEnseignant()]).then(function (r) {
         if (!encoreActuel()) return;
         const b = r[0];
-        const liste = r[1];
         let html = '<h1>Atelier enseignant</h1>' +
-          '<section class="bloc"><h2>Créer un paquet</h2><ol class="etapes">' +
-          '<li><a class="bouton secondaire" href="#/atelier/prompt">1. Copier le prompt</a>' +
-          '<p class="note-discrete">Colle-le dans Claude, puis ta leçon à la fin.</p></li>' +
-          '<li><a class="bouton" href="#/atelier/import">2. Importer la réponse de Claude</a></li></ol>';
+          '<button class="bouton" type="button" id="nouveau-paquet">Nouveau paquet</button>';
         if (b) {
           const n = compter(b);
-          html += '<div class="brouillon"><p><strong>Relecture en cours :</strong> ' + echapper(b.meta.titre || b.meta.id || 'sans titre') +
-            ' — ' + n.relus + ' élément' + (n.relus > 1 ? 's' : '') + ' relu' + (n.relus > 1 ? 's' : '') + ' sur ' + n.total + '</p>' +
-            '<div class="boutons-ligne"><a class="bouton" href="#/atelier/relecture">Reprendre la relecture</a>' +
-            '<button class="bouton danger" type="button" id="abandonner">Abandonner</button></div></div>';
+          html += '<p class="brouillon">Paquet en cours : <strong>' + echapper(b.meta.titre || b.meta.id || 'sans titre') + '</strong>, ' +
+            n.relus + ' élément' + (n.relus > 1 ? 's' : '') + ' relu' + (n.relus > 1 ? 's' : '') + ' sur ' + n.total + '. ' +
+            '<a class="lien" href="#/atelier/nouveau">Reprendre</a></p>';
         }
-        html += '</section><section class="bloc"><h2>Paquets en ligne</h2>';
-        if (!liste) {
-          html += '<p>Liste indisponible sans réseau.</p>';
-        } else {
-          html += '<ul class="paquets-atelier">';
-          liste.forEach(function (p) {
-            html += '<li><span class="paquet-nom">' + (p.paquet ? echapper(p.paquet.titre) : 'Paquet illisible') +
-              ' <code>' + echapper(p.id) + '</code></span><span class="paquet-actions">' +
-              (p.paquet ? '<a class="lien" href="#/atelier/modifier/' + p.id + '">Modifier</a>' : '') +
-              '<a class="lien" href="#/atelier/qr/' + p.id + '">QR code</a></span></li>';
-          });
-          html += '</ul>';
-        }
-        html += '</section>' +
+        html += '<section class="bloc" id="bloc-mes-paquets"><h2>Mes paquets</h2><p>Chargement…</p></section>' +
           '<section class="bloc" id="bloc-classe"><h2>Classe et synchronisation</h2><p>Chargement…</p></section>' +
           blocDateTest() +
           '<section class="bloc"><h2>Données de l\'appareil</h2>' +
-          '<p>Efface de cet appareil : avatars, progression, code de l\'atelier, clé enseignant, code de classe, date de test et brouillon.</p>' +
-          (c.SY.active() ? '<p class="note-discrete">La progression enregistrée sur le serveur est conservée : chaque élève la retrouve avec son code. ' +
+          '<p>Efface de cet appareil : avatars, progression, paquets gardés hors ligne, code de l\'atelier, connexion enseignant, code de classe, date de test et brouillon.</p>' +
+          (c.SY.active() ? '<p class="note-discrete">La progression et les paquets enregistrés sur le serveur sont conservés. ' +
             'Pour effacer aussi le serveur, utilise « Effacer ses données » dans la liste des avatars de la classe.</p>' : '') +
           '<button class="bouton danger" type="button" id="effacer">Effacer les données de cet appareil</button></section>' +
           '<button class="bouton secondaire" type="button" id="fermer">Fermer l\'atelier</button>';
         c.afficher(html, 'Atelier');
 
-        const abandonner = document.getElementById('abandonner');
-        if (abandonner) {
-          abandonner.addEventListener('click', function () {
-            if (!window.confirm('Abandonner la relecture en cours ? Les modifications seront perdues.')) return;
-            abandonnerBrouillon().then(function () { ecranAccueil(encoreActuel); });
-          });
-        }
+        document.getElementById('nouveau-paquet').addEventListener('click', function () {
+          if (b && !window.confirm('Un paquet est en cours. L\'abandonner et commencer un nouveau paquet ?')) return;
+          (b ? abandonnerBrouillon() : Promise.resolve()).then(function () {
+            pageNouveau = { discipline: '', periode: '', niveau: '', lecon: '' };
+            return c.S.ecrireReglage('nouveauPaquet', pageNouveau).catch(function () {});
+          }).then(function () { location.hash = '#/atelier/nouveau'; });
+        });
         brancherDateTest(function () { ecranAccueil(encoreActuel); });
+        remplirMesPaquets(encoreActuel);
         remplirBlocClasse(encoreActuel);
         document.getElementById('effacer').addEventListener('click', function () {
           if (!window.confirm('Effacer tous les avatars et toute la progression de cet appareil ? C\'est définitif sur cet appareil.')) return;
           c.S.toutEffacer().catch(function () {}).then(function () {
             brouillon = null;
+            enseignant = null;
+            pageNouveau = null;
             ouvert = false;
             c.reinitialiser();
             location.hash = '#/';
@@ -341,7 +369,45 @@ Leçon :
       });
     }
 
-    // ---------- Classe et synchronisation (lot 5 bis) ----------
+    // Liste « Mes paquets » : paquets publiés pour la classe, puis fichiers du site pas encore publiés.
+    function remplirMesPaquets(encoreActuel) {
+      const zone = document.getElementById('bloc-mes-paquets');
+      if (!zone) return;
+      const publies = connecte()
+        ? c.SY.appeler('paquets', { classe: enseignant.classe }).then(function (r) { return r.statut === 200 ? r.corps.paquets : null; })
+        : Promise.resolve([]);
+      Promise.all([publies, c.chargerListeFichiers().catch(function () { return []; })]).then(function (r) {
+        if (!encoreActuel() || !document.getElementById('bloc-mes-paquets')) return;
+        const enLigne = r[0];
+        const fichiers = r[1];
+        let html = '<h2>Mes paquets</h2>';
+        if (connecte()) html += '<p class="note-discrete">Paquets publiés pour la classe ' + enseignant.classe + '.</p>';
+        else if (c.SY.active()) html += '<p class="note-discrete">Connecte-toi à ta classe (bloc « Classe et synchronisation ») pour voir et publier ses paquets.</p>';
+        if (connecte() && enLigne === null) html += '<p>Paquets de la classe indisponibles sans réseau.</p>';
+
+        const vus = {};
+        let lignes = '';
+        const ligne = function (titre, id, mention) {
+          return '<li><span class="paquet-nom">' + echapper(titre) + ' <code>' + echapper(id) + '</code>' +
+            (mention ? ' <small>(' + mention + ')</small>' : '') + '</span><span class="paquet-actions">' +
+            '<a class="lien" href="#/atelier/rouvrir/' + id + '">Rouvrir</a>' +
+            '<a class="lien" href="#/atelier/qr/' + id + '">QR code</a></span></li>';
+        };
+        (enLigne || []).forEach(function (p) {
+          vus[p.id] = true;
+          lignes += ligne(p.titre, p.id, '');
+        });
+        fichiers.forEach(function (f) {
+          if (vus[f.id] || !f.paquet) return;
+          lignes += ligne(f.paquet.titre, f.id, connecte() ? 'fichier du site, pas encore publié' : 'fichier du site');
+        });
+        zone.innerHTML = html + (lignes ? '<ul class="paquets-atelier">' + lignes + '</ul>' : '<p>Aucun paquet pour l\'instant.</p>');
+      });
+    }
+
+    // ---------- Classe et synchronisation (lots 5 bis et 5 ter) ----------
+
+    let messageClasse = '';
 
     function remplirBlocClasse(encoreActuel) {
       const bloc = document.getElementById('bloc-classe');
@@ -350,88 +416,111 @@ Leçon :
         bloc.innerHTML = '<h2>Classe et synchronisation</h2><p>Synchronisation non configurée : l\'adresse de la fonction est vide dans synchro.js.</p>';
         return;
       }
-      c.S.lireReglage('cleEnseignant', null).then(function (cle) {
-        if (!encoreActuel()) return;
-        const classe = c.getClasse();
-        let html = '<h2>Classe et synchronisation</h2>' +
-          '<p>Code de la classe sur cet appareil : ' + (classe ? '<strong class="code-affiche">' + classe + '</strong>' : '<strong>aucun</strong>') + '</p>';
-        if (!cle) {
-          html += '<p>Pour gérer la classe, tape la clé enseignant définie dans Supabase.</p>' +
-            '<label class="champ" for="cle-ens">Clé enseignant</label>' +
-            '<input id="cle-ens" class="saisie" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">' +
-            '<p class="message" id="message-cle" role="alert"></p>' +
-            '<button class="bouton" type="button" id="enregistrer-cle">Enregistrer la clé</button>';
-        } else {
-          html += '<div class="boutons-ligne">' +
-            '<button class="bouton" type="button" id="nouvelle-classe">Créer une nouvelle classe</button>' +
-            '<button class="bouton secondaire" type="button" id="autre-classe">Utiliser un autre code de classe</button></div>' +
-            '<p class="message-ok" id="message-classe" role="status"></p>' +
-            '<h3>Avatars de la classe</h3><div id="liste-classe"><p>' + (classe ? 'Chargement…' : 'Aucune classe sur cet appareil.') + '</p></div>' +
-            '<button class="lien bouton-lien" type="button" id="oublier-cle">Oublier la clé enseignant sur cet appareil</button>';
-        }
-        bloc.innerHTML = html;
-        const refaire = function () { remplirBlocClasse(encoreActuel); };
+      const refaire = function () { remplirBlocClasse(encoreActuel); remplirMesPaquets(encoreActuel); };
+      const champ = function (id, libelle, type, valeur, extra) {
+        return '<div><label class="champ" for="' + id + '">' + libelle + '</label>' +
+          '<input id="' + id + '" class="saisie" type="' + type + '" autocomplete="off" autocapitalize="' + (type === 'password' ? 'off' : 'characters') +
+          '" spellcheck="false"' + (valeur ? ' value="' + echapper(valeur) + '"' : '') + (extra || '') + '></div>';
+      };
+      let html = '<h2>Classe et synchronisation</h2>';
+      if (enseignant) {
+        html += '<p>Connecté à la classe <strong class="code-affiche">' + enseignant.classe + '</strong>.</p>' +
+          '<p class="message-ok" id="message-classe" role="status">' + echapper(messageClasse) + '</p>' +
+          '<button class="bouton secondaire" type="button" id="deconnexion">Se déconnecter</button>' +
+          '<h3>Avatars de la classe</h3><div id="liste-classe"><p>Chargement…</p></div>';
+      } else {
+        html += '<p>Connecte-toi à ta classe pour publier des paquets et gérer les avatars.</p>' +
+          '<div class="grille-champs deux">' +
+          champ('ens-classe', 'Code de la classe', 'text', c.getClasse() || '', ' maxlength="8"') +
+          champ('ens-code', 'Code enseignant', 'password', '') + '</div>' +
+          '<p class="message" id="message-ens" role="alert"></p>' +
+          '<button class="bouton" type="button" id="connexion">Se connecter</button>';
+      }
+      html += '<details class="administration"><summary>Administration : créer une classe ou définir son code enseignant</summary>' +
+        '<p class="note-discrete">Il faut la clé d\'administration enregistrée dans Supabase (BOOMERANG_CLE_ENSEIGNANT). Elle n\'est jamais gardée sur l\'appareil.</p>' +
+        '<div class="grille-champs deux">' +
+        champ('adm-cle', 'Clé d\'administration', 'password', '') +
+        champ('adm-classe', 'Code de la classe (pour définir son code)', 'text', (enseignant && enseignant.classe) || c.getClasse() || '', ' maxlength="8"') +
+        champ('adm-code1', 'Nouveau code enseignant (12 caractères au moins)', 'password', '') +
+        champ('adm-code2', 'Répète le code enseignant', 'password', '') + '</div>' +
+        '<p class="message" id="message-adm" role="alert"></p>' +
+        '<div class="boutons-ligne"><button class="bouton" type="button" id="creer-classe">Créer une nouvelle classe</button>' +
+        '<button class="bouton secondaire" type="button" id="definir-code">Définir le code enseignant de cette classe</button></div></details>';
+      bloc.innerHTML = html;
+      messageClasse = '';
 
-        if (!cle) {
-          document.getElementById('enregistrer-cle').addEventListener('click', function () {
-            const valeur = document.getElementById('cle-ens').value.trim();
-            const message = document.getElementById('message-cle');
-            if (valeur.length < 12) { message.textContent = 'La clé fait au moins 12 caractères.'; return; }
-            const verification = classe
-              ? c.SY.appeler('admin-liste', { classe: classe, cle: valeur })
-              : Promise.resolve({ statut: 200 });
-            verification.then(function (r) {
-              if (r.statut === 403) { message.textContent = 'Clé enseignant refusée.'; return; }
-              if (r.statut === 0) { message.textContent = 'Connecte-toi à Internet, puis réessaie.'; return; }
-              c.S.ecrireReglage('cleEnseignant', valeur).then(refaire);
-            });
+      const seConnecter = function (classe, code) {
+        enseignant = { classe: classe, code: code };
+        return c.S.ecrireReglage('enseignant', enseignant).then(function () { return c.setClasse(classe); });
+      };
+
+      if (enseignant) {
+        document.getElementById('deconnexion').addEventListener('click', function () {
+          enseignant = null;
+          c.S.ecrireReglage('enseignant', null).then(refaire);
+        });
+        listerClasse(enseignant.classe, enseignant.code, encoreActuel, refaire);
+      } else {
+        document.getElementById('connexion').addEventListener('click', function () {
+          const classe = c.SY.normaliserClasse(document.getElementById('ens-classe').value);
+          const code = document.getElementById('ens-code').value;
+          const message = document.getElementById('message-ens');
+          if (!c.SY.classeValide(classe)) { message.textContent = 'Le code de la classe a 6 lettres ou chiffres.'; return; }
+          if (code.length < 12) { message.textContent = 'Le code enseignant fait au moins 12 caractères.'; return; }
+          message.textContent = 'Connexion…';
+          c.SY.appeler('ens-connexion', { classe: classe, codeEnseignant: code }).then(function (r) {
+            if (r.statut !== 200) { message.textContent = messageServeur(r); return; }
+            seConnecter(classe, code).then(refaire);
           });
-          return;
-        }
+        });
+      }
 
-        const messageClasse = document.getElementById('message-classe');
-        document.getElementById('nouvelle-classe').addEventListener('click', function () {
-          if (!window.confirm('Créer une nouvelle classe ? Cet appareil passera sur le nouveau code.')) return;
-          let essais = 0;
-          (function essayer() {
-            const code = c.SY.nouveauCodeClasse();
-            c.SY.appeler('admin-creer-classe', { classe: code, cle: cle }).then(function (r) {
-              if (r.statut === 409 && ++essais < 3) { essayer(); return; }
-              if (r.statut === 200) {
-                c.setClasse(code).then(function () {
-                  refaire();
-                  setTimeout(function () {
-                    const m = document.getElementById('message-classe');
-                    if (m) m.textContent = '✓ Nouvelle classe : ' + code + '. Donne ce code aux élèves.';
-                  }, 300);
-                });
-              } else {
-                messageClasse.textContent = r.statut === 403 ? 'Clé enseignant refusée.' :
-                  r.statut === 0 ? 'Connecte-toi à Internet, puis réessaie.' : 'Création impossible. Réessaie.';
-              }
-            });
-          })();
+      // Administration : la clé n'est lue que le temps de l'action.
+      const lireAdministration = function () {
+        const message = document.getElementById('message-adm');
+        const cle = document.getElementById('adm-cle').value;
+        const code1 = document.getElementById('adm-code1').value;
+        const code2 = document.getElementById('adm-code2').value;
+        if (cle.length < 12) { message.textContent = 'La clé d\'administration fait au moins 12 caractères.'; return null; }
+        if (code1.length < 12) { message.textContent = 'Le code enseignant fait au moins 12 caractères.'; return null; }
+        if (code1 !== code2) { message.textContent = 'Les deux codes enseignant sont différents.'; return null; }
+        return { cle: cle, code: code1, message: message };
+      };
+      document.getElementById('creer-classe').addEventListener('click', function () {
+        const a = lireAdministration();
+        if (!a) return;
+        let essais = 0;
+        (function essayer() {
+          const classe = c.SY.nouveauCodeClasse();
+          c.SY.appeler('admin-creer-classe', { classe: classe, cle: a.cle, codeEnseignant: a.code }).then(function (r) {
+            if (r.statut === 409 && ++essais < 3) { essayer(); return; }
+            if (r.statut !== 200) { a.message.textContent = messageServeur(r); return; }
+            messageClasse = '✓ Nouvelle classe : ' + classe + '. Donne ce code aux élèves.';
+            seConnecter(classe, a.code).then(refaire);
+          });
+        })();
+      });
+      document.getElementById('definir-code').addEventListener('click', function () {
+        const a = lireAdministration();
+        if (!a) return;
+        const classe = c.SY.normaliserClasse(document.getElementById('adm-classe').value);
+        if (!c.SY.classeValide(classe)) { a.message.textContent = 'Le code de la classe a 6 lettres ou chiffres.'; return; }
+        c.SY.appeler('admin-code-enseignant', { classe: classe, cle: a.cle, codeEnseignant: a.code }).then(function (r) {
+          if (r.statut !== 200) { a.message.textContent = messageServeur(r); return; }
+          messageClasse = '✓ Code enseignant défini pour la classe ' + classe + '.';
+          seConnecter(classe, a.code).then(refaire);
         });
-        document.getElementById('autre-classe').addEventListener('click', function () {
-          if (!window.confirm('Oublier le code de la classe sur cet appareil ? Il sera demandé à la prochaine ouverture.')) return;
-          c.oublierClasse().then(refaire);
-        });
-        document.getElementById('oublier-cle').addEventListener('click', function () {
-          c.S.ecrireReglage('cleEnseignant', null).then(refaire);
-        });
-        if (classe) listerClasse(classe, cle, encoreActuel, refaire);
       });
     }
 
-    function listerClasse(classe, cle, encoreActuel, refaire) {
-      c.SY.appeler('admin-liste', { classe: classe, cle: cle }).then(function (r) {
+    function listerClasse(classe, code, encoreActuel, refaire) {
+      c.SY.appeler('ens-liste', { classe: classe, codeEnseignant: code }).then(function (r) {
         if (!encoreActuel()) return;
         const zone = document.getElementById('liste-classe');
         if (!zone) return;
         if (r.statut === 0) { zone.innerHTML = '<p>Liste indisponible sans réseau.</p>'; return; }
-        if (r.statut === 403) { zone.innerHTML = '<p>Clé enseignant refusée. Oublie-la puis tape la bonne.</p>'; return; }
         if (r.statut === 404) { zone.innerHTML = '<p>Ce code de classe n\'existe plus sur le serveur (effacement du 31 août ?).</p>'; return; }
-        if (r.statut !== 200) { zone.innerHTML = '<p>Liste indisponible.</p>'; return; }
+        if (r.statut !== 200) { zone.innerHTML = '<p>' + echapper(messageServeur(r)) + ' Déconnecte-toi puis reconnecte-toi.</p>'; return; }
         if (!r.corps.avatars.length) { zone.innerHTML = '<p>Aucun avatar dans cette classe pour l\'instant.</p>'; return; }
         let html = '<ul class="paquets-atelier">';
         r.corps.avatars.forEach(function (a) {
@@ -448,8 +537,8 @@ Leçon :
           b.addEventListener('click', function () {
             const id = b.dataset.reinit;
             if (!window.confirm('Réinitialiser le code de ' + c.nomAvatarId(id) + ' ? Sa progression est conservée ; il choisira un nouveau code.')) return;
-            c.SY.appeler('admin-reinitialiser', { classe: classe, avatar: id, cle: cle }).then(function (rep) {
-              if (rep.statut !== 200) { window.alert('Réinitialisation impossible. Vérifie la connexion.'); return; }
+            c.SY.appeler('ens-reinitialiser', { classe: classe, avatar: id, codeEnseignant: code }).then(function (rep) {
+              if (rep.statut !== 200) { window.alert(messageServeur(rep)); return; }
               // Sur cet appareil aussi, l'ancien code ne doit plus ouvrir l'avatar.
               c.S.lireAvatar(id).then(function (local) {
                 if (!local || local.classe !== classe) return;
@@ -465,8 +554,8 @@ Leçon :
           b.addEventListener('click', function () {
             const id = b.dataset.effacer;
             if (!window.confirm('Effacer toutes les données de ' + c.nomAvatarId(id) + ', sur cet appareil et sur le serveur ? C\'est définitif.')) return;
-            c.SY.appeler('admin-effacer', { classe: classe, avatar: id, cle: cle }).then(function (rep) {
-              if (rep.statut !== 200) { window.alert('Effacement impossible. Vérifie la connexion.'); return; }
+            c.SY.appeler('ens-effacer', { classe: classe, avatar: id, codeEnseignant: code }).then(function (rep) {
+              if (rep.statut !== 200) { window.alert(messageServeur(rep)); return; }
               c.S.lireAvatar(id).then(function (local) {
                 if (local && local.classe === classe) return c.S.effacerAvatarLocal(id);
               }).then(refaire);
@@ -499,138 +588,207 @@ Leçon :
       document.getElementById('vraie-date').addEventListener('click', function () { changer(0); });
     }
 
-    // ---------- Prompt ----------
+    // ---------- Nouveau paquet : leçon, Claude, relecture, publication (lot 5 ter) ----------
 
-    function ecranPrompt() {
-      c.afficher(
-        c.lienRetour('#/atelier', 'Atelier') +
-        '<h1>Prompt de génération</h1>' +
-        '<p>Choisis la discipline, la période et le niveau si tu veux les indiquer à Claude. Sinon, laisse « à compléter ».</p>' +
-        '<div class="grille-champs">' +
-        '<div><label class="champ" for="p-discipline">Discipline</label><select id="p-discipline" class="select">' + options(disciplines(), '', 'À compléter') + '</select></div>' +
-        '<div><label class="champ" for="p-periode">Période</label><select id="p-periode" class="select">' + options(periodes(), '', 'À compléter') + '</select></div>' +
-        '<div><label class="champ" for="p-niveau">Niveau</label><select id="p-niveau" class="select">' + options(NIVEAUX_ATELIER, '', 'À compléter') + '</select></div>' +
-        '</div>' +
-        '<label class="champ" for="prompt">Prompt</label>' +
-        '<textarea id="prompt" class="zone-texte" rows="16" readonly></textarea>' +
-        '<button class="bouton" type="button" id="copier">Copier le prompt</button>' +
-        '<p class="message-ok" id="message" role="status"></p>' +
-        '<p>Dans Claude : colle le prompt, remplace « [coller la leçon] » par ta leçon, puis envoie.</p>' +
-        '<a class="bouton secondaire" href="#/atelier/import">Étape suivante : importer la réponse</a>',
-        'Prompt'
-      );
-      const zone = document.getElementById('prompt');
-      const selects = ['p-discipline', 'p-periode', 'p-niveau'].map(function (id) { return document.getElementById(id); });
+    function pageVide() {
+      return { discipline: '', periode: '', niveau: '', lecon: '' };
+    }
 
-      function majPrompt() {
-        const valeurs = selects.map(function (s) { return s.value; });
-        let ligne = LIGNE_A_COMPLETER;
-        if (valeurs.some(Boolean)) {
-          ligne = 'Discipline, période et niveau : ' +
-            (valeurs[0] || '[à compléter]') + ', ' + (valeurs[1] || '[à compléter]') + ', ' + (valeurs[2] || '[à compléter]');
-        }
-        zone.value = PROMPT.replace(LIGNE_A_COMPLETER, ligne);
-      }
-      selects.forEach(function (s) { s.addEventListener('change', majPrompt); });
-      majPrompt();
-
-      document.getElementById('copier').addEventListener('click', function () {
-        const message = document.getElementById('message');
-        copier(zone.value, zone).then(function () {
-          message.textContent = '✓ Prompt copié. Colle-le dans Claude.';
-        }, function () {
-          message.textContent = 'Copie impossible : sélectionne le texte et copie-le à la main.';
-        });
+    function chargerPageNouveau() {
+      if (pageNouveau) return Promise.resolve(pageNouveau);
+      return c.S.lireReglage('nouveauPaquet', null).then(function (p) {
+        pageNouveau = Object.assign(pageVide(), p || {});
+        return pageNouveau;
       });
     }
 
-    // ---------- Import ----------
+    function sauvegarderPage() {
+      clearTimeout(minuteurPage);
+      minuteurPage = setTimeout(function () {
+        c.S.ecrireReglage('nouveauPaquet', pageNouveau).catch(function () {});
+      }, 400);
+    }
+
+    // Prompt de génération complété avec les menus et la leçon.
+    function promptComplete() {
+      const p = pageNouveau;
+      const ligne = 'Discipline, période et niveau : ' + (p.discipline || '[à compléter]') + ', ' +
+        (p.periode || '[à compléter]') + ', ' + (p.niveau || '[à compléter]');
+      return PROMPT.replace(LIGNE_A_COMPLETER, ligne).replace('[coller la leçon]', p.lecon.trim());
+    }
+
+    // Profondeur d'accolades et de crochets restant ouverts à la fin du texte (hors chaînes).
+    function profondeurFinale(t) {
+      let profondeur = 0;
+      let chaine = false;
+      let echappe = false;
+      for (let i = 0; i < t.length; i++) {
+        const ch = t[i];
+        if (chaine) {
+          if (echappe) echappe = false;
+          else if (ch === '\\') echappe = true;
+          else if (ch === '"') chaine = false;
+          continue;
+        }
+        if (ch === '"') chaine = true;
+        else if (ch === '{' || ch === '[') profondeur++;
+        else if (ch === '}' || ch === ']') profondeur--;
+      }
+      return chaine ? Math.max(profondeur, 1) : profondeur;
+    }
 
     function extraireJSON(brut) {
-      const t = String(brut).trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+      const t = String(brut || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
       const debut = t.indexOf('{');
-      const fin = t.lastIndexOf('}');
-      if (debut === -1 || fin < debut) throw new Error('Aucun objet JSON { … } trouvé dans le texte collé.');
+      if (debut === -1) {
+        throw new Error('Le presse-papiers ne contient pas de paquet. Dans Claude, copie toute sa réponse, puis réessaie.');
+      }
+      if (profondeurFinale(t.slice(debut)) > 0) {
+        throw new Error('La réponse de Claude est incomplète : le paquet s\'arrête avant la fin. ' +
+          'Demande à Claude « Renvoie le paquet complet », copie sa réponse, puis réessaie.');
+      }
       try {
-        return JSON.parse(t.slice(debut, fin + 1));
+        return JSON.parse(t.slice(debut, t.lastIndexOf('}') + 1));
       } catch (e) {
-        throw new Error('Le JSON n\'est pas valide. Demande à Claude de le renvoyer. (Détail : ' + e.message + ')');
+        throw new Error('La réponse de Claude n\'est pas un JSON valide. Demande-lui de renvoyer le paquet, sans texte autour. (Détail : ' + e.message + ')');
       }
     }
 
-    function ecranImport() {
-      c.afficher(
-        c.lienRetour('#/atelier', 'Atelier') +
-        '<h1>Importer la réponse de Claude</h1>' +
-        '<label class="champ" for="json">Colle ici la réponse de Claude</label>' +
-        '<textarea id="json" class="zone-texte" rows="14" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>' +
-        '<label class="champ" for="fichier">Ou choisis un fichier .json</label>' +
-        '<input id="fichier" class="fichier" type="file" accept=".json,application/json">' +
-        '<div class="message" id="message" role="alert"></div>' +
-        '<button class="bouton" type="button" id="importer">Importer et relire</button>',
-        'Importer'
-      );
-      const zone = document.getElementById('json');
-      const message = document.getElementById('message');
+    function lirePressePapiers() {
+      if (navigator.clipboard && navigator.clipboard.readText) return navigator.clipboard.readText();
+      return Promise.reject(new Error('presse-papiers indisponible'));
+    }
 
-      document.getElementById('fichier').addEventListener('change', function (e) {
-        const f = e.target.files[0];
-        if (!f) return;
-        f.text().then(function (t) { zone.value = t; });
+    function ecranNouveau(encoreActuel) {
+      Promise.all([chargerPageNouveau(), chargerBrouillon(), chargerEnseignant()]).then(function () {
+        if (encoreActuel()) dessinerNouveau();
+      });
+    }
+
+    function dessinerNouveau(cibleFocus) {
+      const p = pageNouveau;
+      const scroll = window.scrollY;
+      let html = c.lienRetour('#/atelier', 'Atelier') +
+        '<h1>Nouveau paquet</h1>' +
+        '<div class="grille-champs">' +
+        '<div><label class="champ" for="n-discipline">Discipline</label><select id="n-discipline" class="select" data-menu="discipline">' + options(disciplines(), p.discipline, 'À compléter') + '</select></div>' +
+        '<div><label class="champ" for="n-periode">Période</label><select id="n-periode" class="select" data-menu="periode">' + options(periodes(), p.periode, 'À compléter') + '</select></div>' +
+        '<div><label class="champ" for="n-niveau">Niveau</label><select id="n-niveau" class="select" data-menu="niveau">' + options(NIVEAUX_ATELIER, p.niveau, 'À compléter') + '</select></div>' +
+        '</div>' +
+        '<label class="champ" for="lecon">Leçon</label>' +
+        '<textarea id="lecon" class="zone-texte cadre-lecon" rows="14" placeholder="Colle ici le texte de ta leçon.">' + echapper(p.lecon) + '</textarea>' +
+        '<button class="bouton" type="button" id="copier-claude">Copier pour Claude</button>' +
+        '<p class="message-ok" id="message-copie" role="status"></p>' +
+        '<p class="note-discrete">Dans Claude : colle, envoie, puis copie toute sa réponse.</p>' +
+        '<button class="bouton" type="button" id="coller-claude">Coller la réponse de Claude</button>' +
+        '<div class="message" id="message-coller" role="alert"></div>' +
+        '<div id="coller-secours" hidden>' +
+        '<label class="champ" for="texte-secours">Colle ici la réponse de Claude</label>' +
+        '<textarea id="texte-secours" class="zone-texte" rows="8" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>' +
+        '<button class="bouton secondaire" type="button" id="utiliser-secours">Utiliser ce texte</button></div>';
+      if (brouillon) html += '<div id="editeur">' + htmlRelecture() + '</div>';
+      c.afficher(html, 'Nouveau paquet');
+
+      if (cibleFocus) {
+        const el = document.getElementById(cibleFocus.id);
+        if (el) {
+          el.scrollIntoView({ block: 'center' });
+          const f = cibleFocus.selecteur ? el.querySelector(cibleFocus.selecteur) : null;
+          if (f && !f.disabled) f.focus();
+        }
+      } else {
+        window.scrollTo(0, scroll);
+      }
+      brancherNouveau();
+      if (brouillon) { majBilan(); brancherRelecture(); }
+    }
+
+    function brancherNouveau() {
+      app.querySelectorAll('[data-menu]').forEach(function (m) {
+        m.addEventListener('change', function () { pageNouveau[m.dataset.menu] = m.value; sauvegarderPage(); });
+      });
+      const lecon = document.getElementById('lecon');
+      lecon.addEventListener('input', function () { pageNouveau.lecon = lecon.value; sauvegarderPage(); });
+
+      document.getElementById('copier-claude').addEventListener('click', function () {
+        const message = document.getElementById('message-copie');
+        if (!pageNouveau.lecon.trim()) { message.textContent = 'Colle d\'abord ta leçon dans le cadre.'; return; }
+        copier(promptComplete(), null).then(function () {
+          message.textContent = '✓ Copié. Colle dans Claude, puis envoie.';
+        }, function () {
+          message.textContent = 'Copie impossible sur cet appareil. Réessaie depuis Safari.';
+        });
       });
 
-      document.getElementById('importer').addEventListener('click', function () {
+      const messageColler = document.getElementById('message-coller');
+      const importer = function (texteBrut) {
         let obj;
         try {
-          obj = extraireJSON(zone.value);
+          obj = extraireJSON(texteBrut);
         } catch (err) {
-          message.textContent = err.message;
+          messageColler.textContent = err.message;
           return;
         }
         if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
-          message.textContent = 'Le texte doit contenir un objet { … }.';
+          messageColler.textContent = 'La réponse de Claude doit contenir un paquet { … }.';
           return;
         }
-        const suite = function () {
-          brouillon = versModele(obj, false, 'import');
-          c.S.ecrireReglage('brouillonAtelier', brouillon).catch(function () {});
-          location.hash = '#/atelier/relecture';
-        };
-        chargerBrouillon().then(function (b) {
-          if (b && !window.confirm('Une relecture est déjà en cours. La remplacer par ce nouveau paquet ?')) return;
-          suite();
+        if (brouillon && !window.confirm('Remplacer le paquet en cours par cette réponse de Claude ?')) return;
+        brouillon = versModele(obj, false, 'import');
+        c.S.ecrireReglage('brouillonAtelier', brouillon).catch(function () {});
+        dessinerNouveau({ id: 'el-meta' });
+      };
+      document.getElementById('coller-claude').addEventListener('click', function () {
+        messageColler.textContent = '';
+        lirePressePapiers().then(importer, function () {
+          document.getElementById('coller-secours').hidden = false;
+          messageColler.textContent = 'Le presse-papiers n\'est pas accessible : colle la réponse dans le cadre ci-dessous.';
+          document.getElementById('texte-secours').focus();
         });
+      });
+      document.getElementById('utiliser-secours').addEventListener('click', function () {
+        importer(document.getElementById('texte-secours').value);
       });
     }
 
-    function modifierPaquet(id, encoreActuel) {
+    // « Rouvrir » un paquet de « Mes paquets » : il repart relu, chaque correction décoche l'élément.
+    function rouvrirPaquet(id, encoreActuel) {
       c.chargerPaquet(id).then(function (r) {
         if (!encoreActuel()) return;
-        if (!r.paquet) { location.hash = '#/atelier'; return; }
+        if (!r.paquet) { location.replace('#/atelier'); return; }
         chargerBrouillon().then(function (b) {
-          if (b && !window.confirm('Une relecture est déjà en cours. La remplacer par « ' + r.paquet.titre + ' » ?')) {
-            location.hash = '#/atelier';
+          if (b && !window.confirm('Un paquet est en cours. Le remplacer par « ' + r.paquet.titre + ' » ?')) {
+            location.replace('#/atelier');
             return;
           }
-          // Paquet déjà publié : il a été relu. Toute modification décoche l'élément concerné.
           brouillon = versModele(r.paquet, true, 'site');
+          pageNouveau = {
+            discipline: r.paquet.discipline,
+            periode: r.paquet.periode,
+            niveau: r.paquet.niveau === 'accompagné' ? 'accompagne' : r.paquet.niveau,
+            lecon: ''
+          };
           c.S.ecrireReglage('brouillonAtelier', brouillon).catch(function () {});
-          location.replace('#/atelier/relecture');
+          c.S.ecrireReglage('nouveauPaquet', pageNouveau).catch(function () {});
+          location.replace('#/atelier/nouveau');
         });
       });
     }
 
     // ---------- Relecture ----------
 
+    const ICONE_CORBEILLE = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">' +
+      '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
     function outils(groupe, i, n, nom) {
       return '<div class="outils">' +
         '<button type="button" class="outil" data-action="monter" aria-label="Monter ' + nom + '"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
         '<button type="button" class="outil" data-action="descendre" aria-label="Descendre ' + nom + '"' + (i === n - 1 ? ' disabled' : '') + '>↓</button>' +
-        '<button type="button" class="outil" data-action="supprimer" aria-label="Supprimer ' + nom + '">Supprimer</button></div>';
+        '<button type="button" class="outil corbeille" data-action="supprimer" aria-label="Supprimer ' + nom + '" title="Supprimer">' + ICONE_CORBEILLE + '</button></div>';
     }
 
     function caseRelu(relu, id) {
-      return '<label class="case-relu" for="' + id + '"><input type="checkbox" id="' + id + '" data-relu' + (relu ? ' checked' : '') + '> Relu</label>';
+      return '<button type="button" class="bouton-relu" id="' + id + '" data-relu aria-pressed="' + (relu ? 'true' : 'false') + '">Relu</button>';
     }
 
     function champTexte(id, libelle, valeur, champ, lignes, extra) {
@@ -711,25 +869,13 @@ Leçon :
       return html;
     }
 
-    function ecranRelecture(encoreActuel) {
-      chargerBrouillon().then(function (b) {
-        if (!encoreActuel()) return;
-        if (!b) { location.replace('#/atelier'); return; }
-        dessinerRelecture();
-      });
-    }
-
-    function dessinerRelecture(cibleFocus) {
+    function htmlRelecture() {
       const m = brouillon;
       let quiz = '';
       m.quiz.forEach(function (q, i) { quiz += htmlQuestion(q, i, m.quiz.length); });
-      const scroll = window.scrollY;
-      c.afficher(
-        '<div id="editeur">' +
-        c.lienRetour('#/atelier', 'Atelier') +
-        '<h1>Relecture</h1>' +
-        '<p>Relis chaque élément, corrige-le si besoin, puis coche « Relu ». Modifier un élément le décoche.</p>' +
-        (m.ignores && m.ignores.length ? '<p class="alerte-discrete">Champs ignorés à l\'import : ' + m.ignores.map(echapper).join(', ') + '.</p>' : '') +
+      return '<h2 class="titre-groupe">Relecture</h2>' +
+        '<p>Relis chaque élément, corrige-le sur place si besoin, puis touche « Relu ». Modifier un élément enlève son « Relu ».</p>' +
+        (m.ignores && m.ignores.length ? '<p class="alerte-discrete">Champs ignorés : ' + m.ignores.map(echapper).join(', ') + '.</p>' : '') +
         htmlMeta(m) +
         '<h2 class="titre-groupe">Fiche (' + m.fiche.length + ' idées, 5 à 8)</h2>' + htmlFiche(m) +
         '<button type="button" class="bouton secondaire" data-action="ajouter-fiche">Ajouter une idée</button>' +
@@ -739,22 +885,7 @@ Leçon :
         '<div class="ajout-question"><label class="champ" for="type-ajout">Type de la nouvelle question</label>' +
         '<select id="type-ajout" class="select">' + options(TYPES, 'qcm') + '</select>' +
         '<button type="button" class="bouton secondaire" data-action="ajouter-question">Ajouter une question</button></div>' +
-        '<div class="bilan-relecture" id="bilan-relecture"></div>' +
-        '</div>',
-        'Relecture'
-      );
-      if (cibleFocus) {
-        const el = document.getElementById(cibleFocus.id);
-        if (el) {
-          el.scrollIntoView({ block: 'center' });
-          const f = cibleFocus.selecteur ? el.querySelector(cibleFocus.selecteur) : null;
-          if (f && !f.disabled) f.focus();
-        }
-      } else {
-        window.scrollTo(0, scroll);
-      }
-      majBilan();
-      brancherRelecture();
+        '<div class="bilan-relecture" id="bilan-relecture"></div>';
     }
 
     function erreursActuelles() {
@@ -774,8 +905,17 @@ Leçon :
         erreurs.forEach(function (e) { html += '<li>' + echapper(e) + '</li>'; });
         html += '</ul></details>';
       }
-      html += '<button class="bouton" type="button" data-action="exporter"' + (pret ? '' : ' disabled') + '>' +
-        (pret ? 'Exporter le paquet' : 'Exporter (tout doit être relu et correct)') + '</button>';
+      if (c.SY.active()) {
+        const peut = pret && connecte();
+        html += '<button class="bouton" type="button" data-action="publier"' + (peut ? '' : ' disabled') + '>Publier</button>';
+        if (!pret) html += '<p class="note-discrete">« Publier » s\'active quand tout est relu et correct.</p>';
+        else if (!connecte()) html += '<p class="note-discrete">Pour publier, connecte-toi à ta classe dans l\'atelier (bloc « Classe et synchronisation »).</p>';
+        else html += '<p class="note-discrete">Le paquet sera publié pour la classe ' + enseignant.classe + '.</p>';
+        html += '<p class="message" id="message-publier" role="alert"></p>';
+      } else {
+        html += '<button class="bouton" type="button" data-action="exporter"' + (pret ? '' : ' disabled') + '>' +
+          (pret ? 'Exporter le paquet' : 'Exporter (tout doit être relu et correct)') + '</button>';
+      }
       zone.innerHTML = html;
     }
 
@@ -789,8 +929,8 @@ Leçon :
       const e = elementDe(section);
       if (section.dataset.groupe === 'meta') brouillon.metaRelu = false;
       else if (e) e.relu = false;
-      const box = section.querySelector('[data-relu]');
-      if (box) box.checked = false;
+      const relu = section.querySelector('[data-relu]');
+      if (relu) relu.setAttribute('aria-pressed', 'false');
     }
 
     function brancherRelecture() {
@@ -799,15 +939,7 @@ Leçon :
       editeur.addEventListener('input', function (ev) { saisie(ev.target); });
       editeur.addEventListener('change', function (ev) {
         const t = ev.target;
-        if (t.matches('[data-relu]')) {
-          const section = t.closest('.element');
-          if (section.dataset.groupe === 'meta') brouillon.metaRelu = t.checked;
-          else elementDe(section).relu = t.checked;
-          majBilan();
-          sauvegarder();
-        } else if (t.matches('select, input[type="radio"], input[type="checkbox"]')) {
-          saisie(t);
-        }
+        if (t.matches('select, input[type="radio"], input[type="checkbox"]')) saisie(t);
       });
 
       function saisie(t) {
@@ -833,6 +965,17 @@ Leçon :
       }
 
       editeur.addEventListener('click', function (ev) {
+        const relu = ev.target.closest('[data-relu]');
+        if (relu) {
+          const sec = relu.closest('.element');
+          const etat = relu.getAttribute('aria-pressed') !== 'true';
+          relu.setAttribute('aria-pressed', String(etat));
+          if (sec.dataset.groupe === 'meta') brouillon.metaRelu = etat;
+          else elementDe(sec).relu = etat;
+          majBilan();
+          sauvegarder();
+          return;
+        }
         const b = ev.target.closest('[data-action]');
         if (!b || b.disabled) return;
         const action = b.dataset.action;
@@ -845,25 +988,25 @@ Leçon :
           const j = action === 'monter' ? i - 1 : i + 1;
           const tmp = liste[i]; liste[i] = liste[j]; liste[j] = tmp;
           sauvegarder();
-          dessinerRelecture({ id: 'el-' + groupe + '-' + j, selecteur: '[data-action="' + action + '"]' });
+          dessinerNouveau({ id: 'el-' + groupe + '-' + j, selecteur: '[data-action="' + action + '"]' });
         } else if (action === 'supprimer') {
           if (!window.confirm('Supprimer cet élément ?')) return;
           liste.splice(i, 1);
           sauvegarder();
-          dessinerRelecture({ id: 'el-' + groupe + '-' + Math.max(0, i - 1) });
+          dessinerNouveau({ id: 'el-' + groupe + '-' + Math.max(0, i - 1) });
         } else if (action === 'ajouter-fiche') {
           brouillon.fiche.push({ texte: '', relu: false });
           sauvegarder();
-          dessinerRelecture({ id: 'el-fiche-' + (brouillon.fiche.length - 1), selecteur: 'textarea' });
+          dessinerNouveau({ id: 'el-fiche-' + (brouillon.fiche.length - 1), selecteur: 'textarea' });
         } else if (action === 'ajouter-carte') {
           brouillon.cartes.push({ recto: '', verso: '', relu: false });
           sauvegarder();
-          dessinerRelecture({ id: 'el-cartes-' + (brouillon.cartes.length - 1), selecteur: 'input' });
+          dessinerNouveau({ id: 'el-cartes-' + (brouillon.cartes.length - 1), selecteur: 'input' });
         } else if (action === 'ajouter-question') {
           const type = document.getElementById('type-ajout').value;
           brouillon.quiz.push(versModele({ quiz: [{ type: type }] }, false).quiz[0]);
           sauvegarder();
-          dessinerRelecture({ id: 'el-quiz-' + (brouillon.quiz.length - 1), selecteur: 'textarea, input[type="text"]' });
+          dessinerNouveau({ id: 'el-quiz-' + (brouillon.quiz.length - 1), selecteur: 'textarea, input[type="text"]' });
         } else if (action === 'proposer-id') {
           brouillon.meta.id = proposerId(brouillon.meta.discipline, brouillon.meta.titre);
           document.getElementById('m-id').value = brouillon.meta.id;
@@ -872,11 +1015,34 @@ Leçon :
           sauvegarder();
         } else if (action === 'exporter') {
           exporter();
+        } else if (action === 'publier') {
+          publier();
         }
       });
     }
 
-    // ---------- Export ----------
+    // ---------- Publication (lot 5 ter) ----------
+
+    function publier() {
+      const paquet = versPaquet(brouillon);
+      if (c.V.validerPaquet(paquet, paquet.id).length || !connecte()) return;
+      const message = document.getElementById('message-publier');
+      message.textContent = 'Publication…';
+      c.SY.appeler('ens-publier', { classe: enseignant.classe, codeEnseignant: enseignant.code, paquet: paquet }).then(function (r) {
+        if (r.statut !== 200) { message.textContent = messageServeur(r); return; }
+        // Le paquet est aussitôt disponible sur cet appareil, y compris hors ligne.
+        return c.enregistrerPaquetClasse(enseignant.classe, paquet).catch(function () {}).then(function () {
+          dernierePublication = { id: paquet.id, classe: enseignant.classe };
+          return abandonnerBrouillon();
+        }).then(function () {
+          pageNouveau = pageVide();
+          c.S.ecrireReglage('nouveauPaquet', pageNouveau).catch(function () {});
+          location.hash = '#/atelier/qr/' + paquet.id;
+        });
+      });
+    }
+
+    // ---------- Export (sans synchronisation) ----------
 
     function exporter() {
       const paquet = versPaquet(brouillon);
@@ -922,7 +1088,7 @@ Leçon :
         '<li>Sur github.com, ouvre le dépôt et attends la <strong>coche verte</strong> à côté du dernier commit (1 à 2 minutes). Le paquet est alors en ligne.</li>' +
         '<li>Imprime le QR code pour les élèves.</li></ol>' +
         '<a class="bouton" href="#/atelier/qr/' + e.id + '">QR code à imprimer</a>' +
-        '<a class="bouton secondaire" href="#/atelier/relecture">Revenir à la relecture</a>',
+        '<a class="bouton secondaire" href="#/atelier/nouveau">Revenir à la relecture</a>',
         'Paquet exporté'
       );
       document.getElementById('re-telecharger').addEventListener('click', function () { telecharger(e.id + '.json', e.json); });
@@ -958,6 +1124,8 @@ Leçon :
         c.afficher(
           '<div class="ecran-seul">' + c.lienRetour('#/atelier', 'Atelier') +
           '<h1>QR code</h1>' +
+          (dernierePublication && dernierePublication.id === id
+            ? '<p class="message-ok">✓ Paquet publié pour la classe ' + dernierePublication.classe + '. Les élèves le voient dans « Mes paquets ».</p>' : '') +
           (r.paquet ? '' : '<p class="alerte-discrete">Ce paquet n\'est pas encore en ligne : le QR code fonctionnera après le push et la coche verte.</p>') +
           '<p>Lien : <code class="lien-court">' + echapper(url) + '</code></p>' +
           '<div class="options"><button class="option" type="button" data-mode="affiche" aria-pressed="true">Affiche</button>' +
@@ -1001,11 +1169,9 @@ Leçon :
         return;
       }
       const ecran = parties[0] || '';
-      if (ecran === 'prompt') ecranPrompt();
-      else if (ecran === 'import') ecranImport();
-      else if (ecran === 'relecture') ecranRelecture(encoreActuel);
+      if (ecran === 'nouveau' || ecran === 'relecture' || ecran === 'prompt' || ecran === 'import') ecranNouveau(encoreActuel);
       else if (ecran === 'export') ecranExport();
-      else if (ecran === 'modifier' && parties[1]) modifierPaquet(decodeURIComponent(parties[1]), encoreActuel);
+      else if ((ecran === 'rouvrir' || ecran === 'modifier') && parties[1]) rouvrirPaquet(decodeURIComponent(parties[1]), encoreActuel);
       else if (ecran === 'qr' && parties[1]) ecranQR(decodeURIComponent(parties[1]), encoreActuel);
       else ecranAccueil(encoreActuel);
     }
@@ -1016,7 +1182,8 @@ Leçon :
       versModele: versModele,
       versPaquet: versPaquet,
       extraireJSON: extraireJSON,
-      proposerId: proposerId
+      proposerId: proposerId,
+      profondeurFinale: profondeurFinale
     };
   }
 

@@ -5,12 +5,14 @@
  *              classe, sel, empreinteLocale, essaisFaux, bloqueJusqua }  (champs de classe : lot 5 bis)
  * cartes   : { avatar, paquet, cle, boite, echeance, vues, derniere }  clé [avatar, paquet, cle]
  * reglages : { cle, valeur }  (code de l'atelier, décalage de date de test)
+ * paquets  : { classe, id, contenu }  clé [classe, id] : paquets publiés pour la classe (lot 5 ter),
+ *            gardés pour le hors ligne
  */
 (function (racine) {
   'use strict';
 
   const NOM = 'revision-cm2';
-  const VERSION_BASE = 1;
+  const VERSION_BASE = 2; // 2 : réserve des paquets de la classe (lot 5 ter)
   let connexion = null;
 
   function requete(req) {
@@ -34,6 +36,10 @@
           cartes.createIndex('avatar', 'avatar');
         }
         if (!db.objectStoreNames.contains('reglages')) db.createObjectStore('reglages', { keyPath: 'cle' });
+        if (!db.objectStoreNames.contains('paquets')) {
+          const paquets = db.createObjectStore('paquets', { keyPath: ['classe', 'id'] });
+          paquets.createIndex('classe', 'classe');
+        }
       };
       req.onsuccess = function () {
         connexion = req.result;
@@ -146,6 +152,41 @@
     });
   }
 
+  // ---------- Paquets de la classe (hors ligne) ----------
+
+  function paquetsClasse(classe) {
+    return transaction(['paquets'], 'readonly', function (m) {
+      return requete(m.paquets.index('classe').getAll(classe));
+    }).then(function (liste) {
+      return liste.map(function (p) { return p.contenu; });
+    });
+  }
+
+  function lirePaquet(classe, id) {
+    return transaction(['paquets'], 'readonly', function (m) {
+      return requete(m.paquets.get([classe, id]));
+    }).then(function (p) { return p ? p.contenu : null; });
+  }
+
+  function enregistrerPaquet(classe, contenu) {
+    return transaction(['paquets'], 'readwrite', function (m) {
+      return requete(m.paquets.put({ classe: classe, id: contenu.id, contenu: contenu }));
+    });
+  }
+
+  // Remplace la réserve de la classe par la liste du serveur (un paquet retiré disparaît).
+  function remplacerPaquetsClasse(classe, liste) {
+    return transaction(['paquets'], 'readwrite', function (m) {
+      return requete(m.paquets.index('classe').getAllKeys(classe)).then(function (cles) {
+        return Promise.all(cles.map(function (k) { return requete(m.paquets.delete(k)); }));
+      }).then(function () {
+        return Promise.all(liste.map(function (contenu) {
+          return requete(m.paquets.put({ classe: classe, id: contenu.id, contenu: contenu }));
+        }));
+      });
+    });
+  }
+
   // ---------- Réglages ----------
 
   function lireReglage(cle, parDefaut) {
@@ -186,6 +227,10 @@
     cartesAvatar: cartesAvatar,
     enregistrerCartes: enregistrerCartes,
     effacerAvatarLocal: effacerAvatarLocal,
+    paquetsClasse: paquetsClasse,
+    lirePaquet: lirePaquet,
+    enregistrerPaquet: enregistrerPaquet,
+    remplacerPaquetsClasse: remplacerPaquetsClasse,
     lireReglage: lireReglage,
     ecrireReglage: ecrireReglage,
     toutEffacer: toutEffacer,

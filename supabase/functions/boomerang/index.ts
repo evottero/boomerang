@@ -1,12 +1,13 @@
 // @ts-nocheck
 /*
- * Boomerang : fonction de synchronisation (Supabase Edge Function, lot 5 bis).
+ * Boomerang : fonction de synchronisation et de publication (Supabase Edge Function, lots 5 bis et 5 ter).
  * Seul point d'accès aux tables : l'app n'a jamais accès direct à la base.
  * Ne journalise rien : aucun console.log des requêtes.
  *
  * Secrets à définir dans Supabase (Edge Functions > Secrets) :
  *   BOOMERANG_POIVRE           longue chaîne aléatoire, sert au calcul des empreintes
- *   BOOMERANG_CLE_ENSEIGNANT   clé de l'atelier pour les actions enseignant (12 caractères au moins)
+ *   BOOMERANG_CLE_ENSEIGNANT   clé d'administration (12 caractères au moins) : sert seulement à créer
+ *                              une classe et à définir le code enseignant d'une classe
  *   BOOMERANG_ORIGINE          adresse du site, par exemple https://evottero.github.io
  * SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont fournis automatiquement par Supabase.
  */
@@ -19,6 +20,8 @@ const BLOCAGE_MS = 60 * 60 * 1000;
 const MAX_CARTES = 5000;
 const CLE_MIN = 12;
 const MAX_SEANCES = 100000;
+const CODE_ENSEIGNANT_MIN = 12;
+const TAILLE_PAQUET_MAX = 200000;
 const RE_CLASSE = /^[A-HJ-NP-Z2-9]{6}$/;
 const RE_AVATAR = /^[a-z]{2,20}-[a-z]{2,20}$/;
 const RE_CODE = /^[0-9]{4}$/;
@@ -101,7 +104,51 @@ async function verifierCode(db, env, av, code, maintenant) {
   return reponse(401, { erreur: 'code', restants: ESSAIS_MAX - essais });
 }
 
-// Clé enseignant : 12 caractères au moins, côté configuration comme côté saisie.
+// Code enseignant de la classe (lot 5 ter) : même limitation d'essais que le code élève.
+async function verifierEnseignant(db, env, cl, code, maintenant) {
+  if (!cl.empreinte_enseignant) return reponse(403, { erreur: 'sans-code-enseignant' });
+  if (cl.bloque_enseignant_jusqua && Date.parse(cl.bloque_enseignant_jusqua) > maintenant) {
+    return reponse(423, { erreur: 'bloque', jusqua: cl.bloque_enseignant_jusqua });
+  }
+  if (typeof code === 'string' && code.length >= CODE_ENSEIGNANT_MIN && code.length <= 200) {
+    const e = await empreinte(env.poivre, cl.code, '#enseignant', cl.sel_enseignant, code);
+    if (egal(e, cl.empreinte_enseignant)) {
+      if (cl.essais_faux_enseignant || cl.bloque_enseignant_jusqua) {
+        await db.majClasse(cl.code, { essais_faux_enseignant: 0, bloque_enseignant_jusqua: null });
+      }
+      return reponse(200, { ok: true });
+    }
+  }
+  const essais = (cl.essais_faux_enseignant || 0) + 1;
+  if (essais >= ESSAIS_MAX) {
+    const jusqua = new Date(maintenant + BLOCAGE_MS).toISOString();
+    await db.majClasse(cl.code, { essais_faux_enseignant: 0, bloque_enseignant_jusqua: jusqua });
+    return reponse(423, { erreur: 'bloque', jusqua: jusqua });
+  }
+  await db.majClasse(cl.code, { essais_faux_enseignant: essais, bloque_enseignant_jusqua: null });
+  return reponse(401, { erreur: 'code-enseignant', restants: ESSAIS_MAX - essais });
+}
+
+async function nouveauCodeEnseignant(env, classe, code) {
+  const sel = selAleatoire();
+  return {
+    sel_enseignant: sel,
+    empreinte_enseignant: await empreinte(env.poivre, classe, '#enseignant', sel, code),
+    essais_faux_enseignant: 0,
+    bloque_enseignant_jusqua: null
+  };
+}
+
+// Contrôle minimal côté serveur ; l'app valide chaque paquet en entier à l'ouverture.
+function paquetPublie(p) {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
+  if (typeof p.id !== 'string' || !RE_PAQUET.test(p.id) || p.id.length > 60) return false;
+  if (typeof p.titre !== 'string' || !p.titre.trim() || p.relu !== true) return false;
+  if (!Array.isArray(p.fiche) || !Array.isArray(p.cartes) || !Array.isArray(p.quiz)) return false;
+  return JSON.stringify(p).length <= TAILLE_PAQUET_MAX;
+}
+
+// Clé d'administration : 12 caractères au moins, côté configuration comme côté saisie.
 function cleEnseignantValide(env, cle) {
   return typeof env.cleEnseignant === 'string' && env.cleEnseignant.length >= CLE_MIN &&
     typeof cle === 'string' && cle.length >= CLE_MIN && egal(cle, env.cleEnseignant);
@@ -113,16 +160,33 @@ async function traiter(corps, db, env, maintenant) {
   const classe = typeof corps.classe === 'string' ? corps.classe.toUpperCase() : '';
   if (!RE_CLASSE.test(classe)) return reponse(400, { erreur: 'classe' });
 
-  // ----- Actions enseignant (clé de l'atelier) -----
-  if (typeof action === 'string' && action.indexOf('admin-') === 0) {
+  // ----- Administration (clé d'administration) : créer une classe, définir son code enseignant -----
+  if (action === 'admin-creer-classe' || action === 'admin-code-enseignant') {
     if (!cleEnseignantValide(env, corps.cle)) return reponse(403, { erreur: 'cle' });
+    const codeEns = corps.codeEnseignant;
+    if (typeof codeEns !== 'string' || codeEns.length < CODE_ENSEIGNANT_MIN || codeEns.length > 200) {
+      return reponse(400, { erreur: 'code-enseignant-court' });
+    }
+    const champs = await nouveauCodeEnseignant(env, classe, codeEns);
     if (action === 'admin-creer-classe') {
       if (await db.classeExiste(classe)) return reponse(409, { erreur: 'existe' });
-      await db.creerClasse(classe);
+      await db.creerClasse(Object.assign({ code: classe }, champs));
       return reponse(200, { ok: true });
     }
     if (!(await db.classeExiste(classe))) return reponse(404, { erreur: 'classe' });
-    if (action === 'admin-liste') {
+    await db.majClasse(classe, champs);
+    return reponse(200, { ok: true });
+  }
+
+  // ----- Actions enseignant (code enseignant de la classe) -----
+  if (typeof action === 'string' && action.indexOf('ens-') === 0) {
+    const cl = await db.lireClasse(classe);
+    if (!cl) return reponse(404, { erreur: 'classe' });
+    const verif = await verifierEnseignant(db, env, cl, corps.codeEnseignant, maintenant);
+    if (verif.statut !== 200) return verif;
+
+    if (action === 'ens-connexion') return verif;
+    if (action === 'ens-liste') {
       const liste = await db.listerAvatars(classe);
       return reponse(200, {
         ok: true,
@@ -135,15 +199,20 @@ async function traiter(corps, db, env, maintenant) {
         })
       });
     }
+    if (action === 'ens-publier') {
+      if (!paquetPublie(corps.paquet)) return reponse(400, { erreur: 'paquet' });
+      await db.ecrirePaquet({ classe: classe, id: corps.paquet.id, contenu: corps.paquet });
+      return reponse(200, { ok: true });
+    }
     if (typeof corps.avatar !== 'string' || !RE_AVATAR.test(corps.avatar)) return reponse(400, { erreur: 'avatar' });
     const cible = await db.lireAvatar(classe, corps.avatar);
     if (!cible) return reponse(404, { erreur: 'avatar' });
-    if (action === 'admin-reinitialiser') {
+    if (action === 'ens-reinitialiser') {
       // Le code est effacé, la progression est conservée.
       await db.majAvatar(classe, corps.avatar, { empreinte: null, essais_faux: 0, bloque_jusqua: null });
       return reponse(200, { ok: true });
     }
-    if (action === 'admin-effacer') {
+    if (action === 'ens-effacer') {
       await db.effacerAvatar(classe, corps.avatar);
       return reponse(200, { ok: true });
     }
@@ -156,6 +225,12 @@ async function traiter(corps, db, env, maintenant) {
   if (action === 'classe') {
     const liste = await db.listerAvatars(classe);
     return reponse(200, { ok: true, avatars: liste.map(function (a) { return a.avatar; }) });
+  }
+
+  // Paquets publiés pour la classe : les élèves ne voient que ceux-là.
+  if (action === 'paquets') {
+    const liste = await db.listerPaquets(classe);
+    return reponse(200, { ok: true, paquets: liste.map(function (p) { return p.contenu; }) });
   }
 
   const avatar = corps.avatar;
@@ -250,8 +325,20 @@ function adaptateur(sb) {
     classeExiste: async function (code) {
       return verifier(await sb.from('classes').select('code').eq('code', code).maybeSingle()) !== null;
     },
-    creerClasse: async function (code) {
-      verifier(await sb.from('classes').insert({ code: code }));
+    creerClasse: async function (ligne) {
+      verifier(await sb.from('classes').insert(ligne));
+    },
+    lireClasse: async function (code) {
+      return verifier(await sb.from('classes').select('*').eq('code', code).maybeSingle());
+    },
+    majClasse: async function (code, champs) {
+      verifier(await sb.from('classes').update(champs).eq('code', code));
+    },
+    listerPaquets: async function (classe) {
+      return verifier(await sb.from('paquets').select('contenu').eq('classe', classe).order('id'));
+    },
+    ecrirePaquet: async function (ligne) {
+      verifier(await sb.from('paquets').upsert(ligne, { onConflict: 'classe,id' }));
     },
     listerAvatars: async function (classe) {
       return verifier(await sb.from('avatars').select('avatar, empreinte, bloque_jusqua').eq('classe', classe).order('avatar'));

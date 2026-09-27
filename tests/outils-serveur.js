@@ -16,14 +16,25 @@ function chargerLogique() {
 }
 
 function baseMemoire() {
-  const classes = new Set();
+  const classes = new Map(); // code -> ligne
+  const paquets = new Map(); // "classe|id" -> ligne
   const avatars = new Map(); // "classe|avatar" -> ligne
   const cartes = new Map();  // "classe|avatar|paquet|cle" -> ligne
   const k = function (c, a) { return c + '|' + a; };
   return {
-    donnees: { classes: classes, avatars: avatars, cartes: cartes },
+    donnees: { classes: classes, avatars: avatars, cartes: cartes, paquets: paquets },
     classeExiste: async function (c) { return classes.has(c); },
-    creerClasse: async function (c) { classes.add(c); },
+    creerClasse: async function (ligne) {
+      classes.set(ligne.code, Object.assign({ essais_faux_enseignant: 0, bloque_enseignant_jusqua: null }, ligne));
+    },
+    lireClasse: async function (c) { const l = classes.get(c); return l ? Object.assign({}, l) : null; },
+    majClasse: async function (c, champs) { Object.assign(classes.get(c), champs); },
+    listerPaquets: async function (c) {
+      return Array.from(paquets.values()).filter(function (p) { return p.classe === c; })
+        .sort(function (x, y) { return x.id < y.id ? -1 : 1; })
+        .map(function (p) { return { contenu: JSON.parse(JSON.stringify(p.contenu)) }; });
+    },
+    ecrirePaquet: async function (ligne) { paquets.set(ligne.classe + '|' + ligne.id, JSON.parse(JSON.stringify(ligne))); },
     listerAvatars: async function (c) {
       return Array.from(avatars.values()).filter(function (a) { return a.classe === c; })
         .sort(function (x, y) { return x.avatar < y.avatar ? -1 : 1; })
@@ -48,7 +59,7 @@ function baseMemoire() {
       lignes.forEach(function (l) { cartes.set([l.classe, l.avatar, l.paquet, l.cle].join('|'), Object.assign({}, l)); });
     },
     // Purge du 31 août : supprimer les classes supprime tout en cascade.
-    purger: function () { classes.clear(); avatars.clear(); cartes.clear(); }
+    purger: function () { classes.clear(); avatars.clear(); cartes.clear(); paquets.clear(); }
   };
 }
 

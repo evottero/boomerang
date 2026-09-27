@@ -33,11 +33,11 @@ Périmètre V1 : Mode Classe, lecteur de paquets, 3 activités (fiche, cartes, q
 Ces règles s'imposent au code. Vérifie-les à chaque étape. Chaque règle a un test de recette (section 14).
 
 1. Aucun compte nominatif, aucune adresse mail, aucun prénom demandé. L'élève est représenté par un avatar (animal, couleur), unique dans la classe, protégé par un code élève à 4 chiffres. La classe est identifiée par un code de classe de 6 caractères, saisi une fois par appareil.
-2. Le serveur ne stocke que : le code de classe, l'avatar, l'empreinte du code élève (jamais le code en clair), l'état de la plante sous la forme d'un simple nombre de séances par avatar (sans date ni lieu) et l'état des cartes. S'y ajoutent trois champs techniques : le sel (sert au calcul de l'empreinte), le nombre d'essais faux et la fin du blocage. Les réglages (police, taille, voix) restent sur l'appareil. IndexedDB reste la référence ; le serveur n'en est qu'une copie.
+2. Le serveur ne stocke que : le code de classe, l'empreinte du code enseignant de la classe (jamais le code en clair), les paquets publiés par l'enseignant pour sa classe (contenu pédagogique, aucune donnée d'élève), l'avatar, l'empreinte du code élève (jamais le code en clair), l'état de la plante sous la forme d'un simple nombre de séances par avatar (sans date ni lieu) et l'état des cartes. S'y ajoutent des champs techniques : le sel (sert au calcul des empreintes), le nombre d'essais faux et la fin du blocage, pour le code élève comme pour le code enseignant. Les réglages (police, taille, voix) restent sur l'appareil. IndexedDB reste la référence ; le serveur n'en est qu'une copie.
 3. Aucun script tiers : pas d'analytics, pas de police Google chargée à distance, pas de CDN au moment de l'usage. Toutes les ressources sont embarquées dans le site.
 4. Aucun cookie.
 5. Aucune requête réseau hors du site lui-même et de la fonction de synchronisation. L'app reste entièrement utilisable hors ligne ; la synchronisation se fait au retour du réseau.
-6. Aucun accès direct aux tables depuis l'app : tout passe par une Edge Function. Après 5 codes élève faux, l'avatar est bloqué une heure. Les actions enseignant sont protégées par une clé enseignant d'au moins 12 caractères (jusqu'au lot 5 ter, qui la remplace par un code enseignant par classe).
+6. Aucun accès direct aux tables depuis l'app : tout passe par une Edge Function. Après 5 codes élève faux, l'avatar est bloqué une heure. Les actions enseignant (publier, liste des avatars, réinitialiser un code, effacer un élève) sont protégées par le code enseignant de la classe, d'au moins 12 caractères, avec la même limitation d'essais. La clé d'administration, d'au moins 12 caractères, ne sert qu'à créer une classe et à définir son code enseignant.
 7. Code élève : saisi deux fois à la création, demandé à chaque ouverture ; chiffres tous identiques et 1234 refusés ; clavier à gros chiffres avec lecture vocale. L'atelier peut réinitialiser le code d'un avatar sans toucher à sa progression.
 8. En V2, la photo reste sur l'appareil. La reconnaissance du texte (OCR) se fait localement. Seul le texte relu part vers l'IA.
 9. « Effacer mes données » vide l'appareil en un geste et supprime aussi la progression sur le serveur. Toutes les données du serveur sont effacées automatiquement chaque 31 août.
@@ -64,7 +64,7 @@ Deux outils : un atelier enseignant pour fabriquer les paquets, un lecteur élè
 - L'enseignant colle le texte de sa leçon dans Claude (chat), avec un prompt fourni par le projet. Claude renvoie un paquet au format JSON (section 10).
 - L'atelier importe ce JSON, l'affiche question par question et permet de corriger, supprimer, réordonner, ajouter.
 - Validation obligatoire : un paquet ne peut pas être publié tant que chaque élément n'est pas coché « relu ».
-- Export : un fichier .json à déposer dans le dossier `paquets/` du site, puis génération d'un lien court et d'un QR code imprimable.
+- Publication (lot 5 ter) : « Publier » enregistre le paquet sur le serveur pour la classe, puis affiche son QR code. Sans synchronisation, un export en fichier .json à déposer dans `paquets/` reste possible. Parcours détaillé et libellés exacts : voir le lot 5 ter (section 13).
 - Métadonnées : discipline, titre, période (P1 à P10), niveau (accompagné, standard, approfondi).
 
 ### 5.2 Lecteur élève
@@ -223,14 +223,14 @@ Prompt de génération : il est intégré à l'atelier enseignant (bouton « Cop
 | Écran | Contenu | Côté |
 | --- | --- | --- |
 | Choix de l'avatar | 44 avatars possibles : 11 animaux (renard, panda, grenouille, hibou, tortue, dauphin, lion, lapin, hérisson, abeille, chat) déclinés en 4 couleurs (rouge, jaune, vert, bleu). Les avatars déjà créés ne changent pas. L'écran n'affiche que les avatars créés sur cet appareil, plus le bouton « Nouvel avatar ». Sur un même appareil, un avatar déjà pris ne peut plus être choisi | Élève |
-| Mes paquets | Paquets par discipline, pastille « cartes à revoir » | Élève |
+| Mes paquets | Paquets par discipline, pastille « cartes à revoir ». Avec une classe : seulement les paquets publiés pour la classe, gardés sur l'appareil pour le hors ligne. Sans classe : les fichiers du dossier `paquets/` | Élève |
 | Paquet | Trois gros boutons : Fiche, Cartes, Quiz | Élève |
 | Fiche | Idées clés, bouton haut-parleur par ligne | Élève |
 | Cartes | Carte à retourner, trois boutons d'autoévaluation | Élève |
 | Quiz | Une question, correction immédiate, explication | Élève |
 | Bilan | Réussites, cartes à revoir, plante de l'avatar | Élève |
 | Réglages | Police, taille, voix (propres à chaque avatar), bloc « Classe » avec le bouton « Utiliser sans classe » et l'avertissement « Sans code de classe, ta progression ne te suivra pas sur les autres appareils. », confidentialité. Accessible aussi sans avatar depuis l'écran du code de classe (bloc « Classe » seulement). Pas d'effacement côté élève : il se fait dans l'atelier | Élève et adulte |
-| Atelier | Import JSON, relecture élément par élément, export, QR code | Enseignant |
+| Atelier | « Nouveau paquet », « Mes paquets », connexion à la classe par code enseignant, administration (créer une classe, définir son code enseignant), avatars de la classe, date de test, données de l'appareil. Écran « Nouveau paquet » : menus, leçon, « Copier pour Claude », « Coller la réponse de Claude », relecture (corbeille, « Relu »), « Publier », QR code | Enseignant |
 
 L'atelier est protégé par un code local à 4 chiffres. C'est un garde-fou, pas une sécurité.
 
@@ -264,9 +264,10 @@ Lots courts, chacun testé sur un vrai iPad avant le suivant. Ne passe jamais au
 
 ### Lot 5 ter : publier un paquet sans fichier ni GitHub
 
-À réaliser après validation du lot 5 bis. Rien n'est codé pour l'instant.
+Codé le 27/09/2026 (version 0.7.0), après validation du lot 5 bis.
 
-- Multi-classes : chaque classe a son code de classe et un code enseignant de 8 caractères, stocké uniquement sous forme d'empreinte, vérifié par une Edge Function avec la même limitation d'essais (5 essais faux, puis blocage d'une heure).
+- Multi-classes : chaque classe a son code de classe et un code enseignant d'au moins 12 caractères (il autorise à publier sur le serveur), stocké uniquement sous forme d'empreinte, vérifié par une Edge Function avec la même limitation d'essais (5 essais faux, puis blocage d'une heure).
+- La clé d'administration (le secret `BOOMERANG_CLE_ENSEIGNANT`, 12 caractères au moins) ne sert plus qu'à créer une classe et à définir ou redéfinir le code enseignant d'une classe. Elle n'est jamais gardée sur l'appareil.
 - Les élèves ne voient que les paquets de leur classe. Les paquets actuels du dossier `paquets/` sont rattachés à la classe d'Eric.
 - Atelier, dans cet ordre et avec exactement ces libellés :
     1. Bouton « Nouveau paquet ».
@@ -291,6 +292,8 @@ Lots courts, chacun testé sur un vrai iPad avant le suivant. Ne passe jamais au
 - [ ] Deux avatars sur le même iPad ont des progressions séparées.
 - [ ] Un JSON mal formé est refusé avec un message clair.
 - [ ] Un paquet non relu ne peut pas être exporté.
+- [ ] « Publier » reste inactif tant qu'un élément n'est pas relu.
+- [ ] Un élève ne voit que les paquets de sa classe.
 - [ ] Toutes les consignes sont lisibles par la synthèse vocale et par VoiceOver.
 - [ ] Contraste AA vérifié sur tous les écrans.
 
