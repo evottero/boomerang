@@ -215,7 +215,7 @@ Aucun champ ne contient de donnée d'élève : tout champ inconnu fait refuser l
 
 | Écran | Contenu | Côté |
 | --- | --- | --- |
-| Choix de l'avatar | 12 avatars (animaux, couleurs), bouton « Nouvel avatar » | Élève |
+| Choix de l'avatar | 40 avatars possibles : 10 animaux déclinés en 4 couleurs. L'écran n'affiche que les avatars créés sur cet appareil, plus le bouton « Nouvel avatar ». Sur un même appareil, un avatar déjà pris ne peut plus être choisi | Élève |
 | Mes paquets | Paquets par discipline, pastille « cartes à revoir » | Élève |
 | Paquet | Trois gros boutons : Fiche, Cartes, Quiz | Élève |
 | Fiche | Idées clés, bouton haut-parleur par ligne | Élève |

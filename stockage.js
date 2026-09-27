@@ -1,7 +1,7 @@
 /*
  * Stockage local IndexedDB (règle 2 : rien ne quitte l'appareil).
  *
- * avatars  : { id: 'renard-bleu', animal, couleur, cree, seances }
+ * avatars  : { id: 'renard-bleu', animal, couleur, cree, seances, reglages }
  * cartes   : { avatar, paquet, cle, boite, echeance, vues, derniere }  clé [avatar, paquet, cle]
  * reglages : { cle, valeur }  (code de l'atelier, décalage de date de test)
  */
@@ -83,6 +83,13 @@
     });
   }
 
+  // Enregistre l'avatar entier (par exemple après un changement de réglages).
+  function enregistrerAvatar(avatar) {
+    return transaction(['avatars'], 'readwrite', function (m) {
+      return requete(m.avatars.put(avatar));
+    });
+  }
+
   function compterSeance(id) {
     return transaction(['avatars'], 'readwrite', function (m) {
       return requete(m.avatars.get(id)).then(function (a) {
@@ -146,6 +153,7 @@
     listerAvatars: listerAvatars,
     lireAvatar: lireAvatar,
     ajouterAvatar: ajouterAvatar,
+    enregistrerAvatar: enregistrerAvatar,
     compterSeance: compterSeance,
     etatsCartes: etatsCartes,
     enregistrerCarte: enregistrerCarte,

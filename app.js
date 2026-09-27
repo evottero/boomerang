@@ -2,7 +2,8 @@
 
 // Lecteur élève et atelier enseignant minimal.
 // Écrans : #/ (avatar puis paquets), #/avatars, #/avatar/nouveau, #/paquets,
-// #/paquet/ID, #/paquet/ID/fiche, #/paquet/ID/cartes, #/paquet/ID/quiz, #/atelier (caché).
+// #/paquet/ID, #/paquet/ID/fiche, #/paquet/ID/cartes, #/paquet/ID/quiz,
+// #/reglages, #/confidentialite, #/atelier (caché).
 // Aucun cookie, aucune requête hors du site.
 
 (function () {
@@ -10,8 +11,9 @@
   const M = window.Moteur;
   const S = window.Stockage;
   const Q = window.Quiz;
+  const VX = window.Voix;
   const app = document.getElementById('app');
-  const VERSION_APP = '0.3.0';
+  const VERSION_APP = '0.4.2';
 
   const DISCIPLINES = {
     histoire: { nom: 'Histoire', icone: '🏰' },
@@ -27,7 +29,7 @@
 
   const NIVEAUX = { 'accompagné': 'Accompagné', standard: 'Standard', approfondi: 'Approfondi' };
 
-  // 12 animaux (f = féminin, pour accorder la couleur) et 6 couleurs.
+  // 40 avatars : 10 animaux (f = féminin, pour accorder la couleur) × 4 couleurs.
   const ANIMAUX = {
     renard: { nom: 'Renard', icone: '🦊' },
     panda: { nom: 'Panda', icone: '🐼' },
@@ -37,19 +39,30 @@
     dauphin: { nom: 'Dauphin', icone: '🐬' },
     lion: { nom: 'Lion', icone: '🦁' },
     lapin: { nom: 'Lapin', icone: '🐰' },
-    manchot: { nom: 'Manchot', icone: '🐧' },
     herisson: { nom: 'Hérisson', icone: '🦔' },
-    pieuvre: { nom: 'Pieuvre', icone: '🐙', f: true },
     abeille: { nom: 'Abeille', icone: '🐝', f: true }
   };
   const COULEURS = {
     rouge: { m: 'rouge', f: 'rouge' },
-    orange: { m: 'orange', f: 'orange' },
     jaune: { m: 'jaune', f: 'jaune' },
     vert: { m: 'vert', f: 'verte' },
-    bleu: { m: 'bleu', f: 'bleue' },
+    bleu: { m: 'bleu', f: 'bleue' }
+  };
+  const NB_AVATARS = Object.keys(ANIMAUX).length * Object.keys(COULEURS).length;
+
+  // Retirés de la liste le 27/09/2026 : les avatars déjà créés avec eux restent utilisables.
+  const ANCIENS_ANIMAUX = {
+    manchot: { nom: 'Manchot', icone: '🐧' },
+    pieuvre: { nom: 'Pieuvre', icone: '🐙', f: true }
+  };
+  const ANCIENNES_COULEURS = {
+    orange: { m: 'orange', f: 'orange' },
     violet: { m: 'violet', f: 'violette' }
   };
+
+  function animalDe(a) {
+    return ANIMAUX[a.animal] || ANCIENS_ANIMAUX[a.animal] || { nom: 'Avatar', icone: '🙂' };
+  }
 
   const NOTES = {
     savais: { texte: 'Je savais', icone: '✓' },
@@ -69,12 +82,26 @@
   let atelierOuvert = false;    // code saisi pendant cette ouverture de l'app
   let apresAvatar = null;       // écran à rouvrir une fois l'avatar choisi
 
+  // Réglages d'affichage et de voix, propres à chaque avatar (iPad partagé).
+  const REGLAGES_DEFAUT = { police: 'luciole', taille: 1, vitesse: 'normale', voix: null };
+
+  function reglagesDe(avatar) {
+    return Object.assign({}, REGLAGES_DEFAUT, avatar && avatar.reglages);
+  }
+
+  function appliquerReglages(r) {
+    document.documentElement.dataset.police = r.police;
+    document.documentElement.dataset.taille = String(r.taille);
+    VX.regler(r);
+  }
+
   function aujourdhui() {
     return M.jourLocal() + decalageJours;
   }
 
   function memoriserAvatar(avatar) {
     avatarCourant = avatar;
+    appliquerReglages(reglagesDe(avatar));
     // sessionStorage : l'avatar est oublié à la fermeture de l'app (iPad partagé).
     try {
       if (avatar) sessionStorage.setItem('avatar', avatar.id);
@@ -101,12 +128,13 @@
   }
 
   function nomAvatar(a) {
-    const animal = ANIMAUX[a.animal];
-    return animal.nom + ' ' + COULEURS[a.couleur][animal.f ? 'f' : 'm'];
+    const animal = animalDe(a);
+    const couleur = COULEURS[a.couleur] || ANCIENNES_COULEURS[a.couleur];
+    return animal.nom + (couleur ? ' ' + couleur[animal.f ? 'f' : 'm'] : '');
   }
 
   function iconeAvatar(a) {
-    return ANIMAUX[a.animal].icone;
+    return animalDe(a).icone;
   }
 
   function melanger(liste) {
@@ -127,8 +155,55 @@
   // Numéro de l'écran demandé : un chargement lent ne doit pas écraser un écran plus récent.
   let ecranCourant = 0;
 
+  // Bouton haut-parleur. La lecture ne démarre que sur un appui (voir l'écouteur plus bas).
+  const ICONE_HP = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path d="M3 9.5v5h4l5 4v-13l-5 4H3z" fill="currentColor"/>' +
+    '<path d="M15.5 8.5a4.5 4.5 0 0 1 0 7M18 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+  function boutonLire(texte, libelle) {
+    if (!VX.disponible()) return '';
+    return '<button class="lire" type="button" data-lire="' + echapper(texte) + '" aria-label="' + libelle + '">' + ICONE_HP + '</button>';
+  }
+
+  // Ajoute un haut-parleur à chaque consigne, question, idée de fiche et correction.
+  const A_LIRE = [
+    ['.consigne', 'Écouter la consigne'],
+    ['.question', 'Écouter la question'],
+    ['.fiche li', 'Écouter cette idée'],
+    ['.correction', 'Écouter la correction']
+  ];
+
+  // Texte affiché, un paragraphe = une phrase (sinon la voix colle les mots de deux paragraphes).
+  function texteVisible(el) {
+    return (el.innerText || el.textContent)
+      .split(/\n+/)
+      .map(function (l) { return l.trim(); })
+      .filter(Boolean)
+      .map(function (l) { return /[.!?:;]$/.test(l) ? l : l + '.'; })
+      .join(' ');
+  }
+
+  function ajouterLecture(racine) {
+    if (!VX.disponible()) return;
+    A_LIRE.forEach(function (paire) {
+      racine.querySelectorAll(paire[0]).forEach(function (el) {
+        if (el.querySelector(':scope > .lire')) return;
+        const texte = el.dataset.lire || texteVisible(el);
+        if (!texte.trim()) return;
+        el.classList.add('a-lecture');
+        el.insertAdjacentHTML('beforeend', boutonLire(texte, paire[1]));
+      });
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    const bouton = e.target.closest ? e.target.closest('.lire') : null;
+    if (bouton) VX.lire(bouton.dataset.lire);
+  });
+
   function afficher(html, titre) {
     app.innerHTML = html;
+    ajouterLecture(app);
     document.title = titre ? titre + ' – Révision CM2' : 'Révision CM2';
     window.scrollTo(0, 0);
     // VoiceOver annonce le nouvel écran.
@@ -184,7 +259,7 @@
         });
       })
       .catch(function () {
-        return { id: id, horsLigne: true, erreurs: ['Ce paquet n\'est pas encore sur cet appareil. Ouvre-le une première fois avec Internet.'] };
+        return { id: id, horsLigne: true, erreurs: ['Ouvre ce paquet une première fois avec Internet.'] };
       });
   }
 
@@ -210,8 +285,8 @@
     if (!stockageOk) {
       afficher(
         '<h1>Qui es-tu ?</h1>' +
-        '<p class="consigne">Cet appareil ne peut pas garder ta progression.</p>' +
-        '<p>Tu peux quand même lire les fiches.</p>' +
+        '<p class="info">Cet appareil ne peut pas garder ta progression.</p>' +
+        '<p class="consigne">Lis les fiches sans avatar.</p>' +
         '<a class="bouton" href="#/paquets">Voir les paquets</a>' +
         piedDePage(),
         'Qui es-tu ?'
@@ -232,7 +307,12 @@
         });
         html += '</ul>';
       }
-      html += '<a class="bouton" href="#/avatar/nouveau"><span aria-hidden="true">＋</span> Nouvel avatar</a>' +
+      const libres = NB_AVATARS - avatars.filter(function (a) {
+        return ANIMAUX[a.animal] && COULEURS[a.couleur];
+      }).length;
+      html += (libres > 0
+        ? '<a class="bouton" href="#/avatar/nouveau"><span aria-hidden="true">＋</span> Nouvel avatar</a>'
+        : '<p class="info">Les ' + NB_AVATARS + ' avatars sont déjà pris sur cet appareil.</p>') +
         piedDePage();
       afficher(html, 'Qui es-tu ?');
 
@@ -319,14 +399,15 @@
       return '<div class="entete-avatar" data-couleur="' + avatarCourant.couleur + '">' +
         '<span class="avatar-icone" aria-hidden="true">' + iconeAvatar(avatarCourant) + '</span>' +
         '<span class="avatar-nom">' + nomAvatar(avatarCourant) + '</span>' +
-        '<a href="#/avatars">Changer</a></div>';
+        '<a href="#/avatars" aria-label="Changer d\'avatar">Changer</a>' +
+        '<a href="#/reglages"><span aria-hidden="true">⚙️</span> Réglages</a></div>';
     }
-    if (stockageOk) return '<p><a href="#/avatars">Choisir mon avatar</a></p>';
+    if (stockageOk) return '<p><a class="lien" href="#/avatars">Choisir mon avatar</a></p>';
     return '';
   }
 
   function ecranAccueil(encoreActuel) {
-    afficher('<h1>Mes paquets</h1><p class="consigne">Chargement…</p>', 'Mes paquets');
+    afficher('<h1>Mes paquets</h1><p class="chargement">Chargement…</p>', 'Mes paquets');
 
     chargerListe()
       .then(function (resultats) {
@@ -353,7 +434,7 @@
         }
 
         if (d.valides.length === 0) {
-          html += '<p class="consigne">Aucun paquet disponible pour l\'instant.</p>';
+          html += '<p class="info">Aucun paquet disponible pour l\'instant.</p>';
         } else {
           html += '<p class="consigne">Choisis un paquet.</p>';
           Object.keys(DISCIPLINES).forEach(function (cle) {
@@ -395,7 +476,7 @@
   // ---------- Paquet et fiche ----------
 
   function ecranPaquet(id, encoreActuel) {
-    afficher('<p class="consigne">Chargement…</p>');
+    afficher('<p class="chargement">Chargement…</p>');
     chargerPaquet(id).then(function (r) {
       if (!encoreActuel()) return;
       if (!r.paquet) { ecranErreur(r); return; }
@@ -416,7 +497,7 @@
   }
 
   function ecranFiche(id, encoreActuel) {
-    afficher('<p class="consigne">Chargement…</p>');
+    afficher('<p class="chargement">Chargement…</p>');
     chargerPaquet(id).then(function (r) {
       if (!encoreActuel()) return;
       if (!r.paquet) { ecranErreur(r); return; }
@@ -457,7 +538,7 @@
       location.hash = '#/avatars';
       return;
     }
-    afficher('<p class="consigne">Chargement…</p>');
+    afficher('<p class="chargement">Chargement…</p>');
     const avatar = avatarCourant;
     chargerPaquet(id).then(function (r) {
       if (!encoreActuel()) return;
@@ -471,7 +552,7 @@
           afficher(
             lienRetour('#/paquet/' + p.id, p.titre) +
             '<h1>Cartes : ' + echapper(p.titre) + '</h1>' +
-            '<p class="consigne">Rien à revoir aujourd\'hui. Reviens demain.</p>' +
+            '<p class="consigne">Reviens demain : rien à revoir aujourd\'hui.</p>' +
             '<button class="bouton" type="button" id="quand-meme">Revoir quand même</button>',
             'Cartes : ' + p.titre
           );
@@ -485,7 +566,7 @@
     }).catch(function () {
       if (!encoreActuel()) return;
       afficher(lienRetour('#/paquets', 'Mes paquets') +
-        '<h1>Cartes</h1><p class="consigne">Ta progression n\'a pas pu être lue sur cet appareil.</p>');
+        '<h1>Cartes</h1><p class="info">Ta progression n\'a pas pu être lue sur cet appareil.</p>');
     });
   }
 
@@ -516,7 +597,9 @@
         '<p class="consigne">Trouve la réponse dans ta tête, puis touche la carte.</p>' +
         '<button class="carte" type="button" id="carte">' +
         '<span class="carte-texte">' + avecGras(carte.recto) + '</span>' +
-        '<span class="carte-indice">Touche pour retourner</span></button>';
+        '<span class="carte-indice">Touche pour retourner</span></button>' +
+        '<div class="lire-carte">' + boutonLire(carte.recto, 'Écouter la carte') + '</div>';
+      ajouterLecture(zone);
       const bouton = document.getElementById('carte');
       if (position > 0) bouton.focus();
       bouton.addEventListener('click', verso);
@@ -527,7 +610,8 @@
       let html =
         '<div class="carte retournee">' +
         '<p class="carte-recto">' + avecGras(carte.recto) + '</p>' +
-        '<p class="carte-texte" id="verso" tabindex="-1">' + avecGras(carte.verso) + '</p></div>' +
+        '<p class="carte-texte" id="verso" tabindex="-1">' + avecGras(carte.verso) + '</p>' +
+        '<div class="lire-carte">' + boutonLire(carte.verso, 'Écouter la réponse') + '</div></div>' +
         '<p class="consigne">Dis si tu savais la réponse.</p><div class="notes">';
       Object.keys(NOTES).forEach(function (n) {
         html += '<button class="note" type="button" data-note="' + n + '">' +
@@ -535,6 +619,7 @@
       });
       html += '</div>';
       zone.innerHTML = html;
+      ajouterLecture(zone);
       document.getElementById('verso').focus();
       zone.querySelectorAll('.note').forEach(function (b) {
         b.addEventListener('click', function () { noter(b.dataset.note); });
@@ -572,7 +657,7 @@
       const aRevoir = vues.filter(function (c) { return derniereNote[c] !== 'savais'; });
       let html = lienRetour('#/paquet/' + p.id, p.titre) +
         '<h1>Séance terminée</h1>' +
-        '<p class="consigne">Tu savais <strong>' + reussites + '</strong> ' + (reussites > 1 ? 'cartes' : 'carte') +
+        '<p class="resultat">Tu savais <strong>' + reussites + '</strong> ' + (reussites > 1 ? 'cartes' : 'carte') +
         ' sur <strong>' + vues.length + '</strong> du premier coup.</p>';
       if (aRevoir.length) {
         html += '<h2>Cartes à revoir</h2><ul class="a-revoir">';
@@ -650,7 +735,7 @@
       location.hash = '#/avatars';
       return;
     }
-    afficher('<p class="consigne">Chargement…</p>');
+    afficher('<p class="chargement">Chargement…</p>');
     const avatar = avatarCourant;
     chargerPaquet(id).then(function (r) {
       if (!encoreActuel()) return;
@@ -687,7 +772,8 @@
 
       if (q.type === 'qcm') {
         html += '<p class="consigne">Choisis la bonne réponse.</p>' +
-          '<p class="question">' + avecGras(q.question) + '</p><div class="reponses">';
+          '<p class="question" data-lire="' + echapper(q.question + ' Choix : ' + q.choix.join(' ; ') + '.') + '">' +
+          avecGras(q.question) + '</p><div class="reponses">';
         q.choix.forEach(function (c, k) {
           html += '<button class="reponse" type="button" data-valeur="' + k + '">' + avecGras(c) + '</button>';
         });
@@ -700,7 +786,7 @@
       } else if (q.type === 'trous') {
         const morceaux = q.texte.split('___');
         html += '<p class="consigne">Écris le mot qui manque.</p>' +
-          '<p class="question">' + avecGras(morceaux[0]) +
+          '<p class="question" data-lire="' + echapper(q.texte) + '">' + avecGras(morceaux[0]) +
           '<input class="trou" id="trou" type="text" aria-label="Mot qui manque" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">' +
           avecGras(morceaux[1]) + '</p>' +
           '<button class="bouton" type="button" id="valider" disabled>Valider</button>';
@@ -734,11 +820,14 @@
       } else {
         brancherOrdre(q);
       }
+      ajouterLecture(zone);
     }
 
     // Remise en ordre : l'élève touche les étiquettes, elles se placent dans des cases numérotées.
     function brancherOrdre(q) {
       const melange = Q.melangerOrdre(q.elements);
+      // La voix lit les étiquettes dans l'ordre mélangé, jamais dans le bon ordre.
+      zone.querySelector('.question').dataset.lire = q.question + ' Étiquettes : ' + melange.join(' ; ') + '.';
       const places = []; // indices dans melange, dans l'ordre choisi
       const cases = document.getElementById('cases');
       const etiquettes = document.getElementById('etiquettes');
@@ -785,7 +874,7 @@
       const reviendra = Q.repondre(d, res.juste);
 
       // Plus de réponse possible : on montre la correction sur place.
-      zone.querySelectorAll('button').forEach(function (el) { el.disabled = true; });
+      zone.querySelectorAll('button:not(.lire)').forEach(function (el) { el.disabled = true; });
       zone.querySelectorAll('input').forEach(function (el) { el.readOnly = true; el.blur(); });
       const boutonValider = document.getElementById('valider');
       if (boutonValider) boutonValider.remove();
@@ -823,6 +912,7 @@
       if (reviendra) html += '<p class="note-discrete">Cette question reviendra à la fin du quiz.</p>';
       html += '</div><button class="bouton" type="button" id="continuer">Continuer</button>';
       zone.insertAdjacentHTML('beforeend', html);
+      ajouterLecture(zone);
 
       const correction = document.getElementById('correction');
       correction.focus();
@@ -839,7 +929,7 @@
         const b = Q.bilan(d);
         let html = lienRetour('#/paquet/' + p.id, p.titre) +
           '<h1>Quiz terminé</h1>' +
-          '<p class="consigne">Tu as réussi <strong>' + b.reussites + '</strong> ' + (b.reussites > 1 ? 'questions' : 'question') +
+          '<p class="resultat">Tu as réussi <strong>' + b.reussites + '</strong> ' + (b.reussites > 1 ? 'questions' : 'question') +
           ' sur <strong>' + b.total + '</strong> du premier coup.</p>';
         if (b.rattrapees) {
           html += '<p>Tu en as corrigé ' + b.rattrapees + ' à la fin.</p>';
@@ -860,6 +950,130 @@
     }
 
     question();
+  }
+
+  // ---------- Réglages de l'avatar ----------
+
+  const TAILLES = { 1: 'Normale', 2: 'Grande', 3: 'Très grande' };
+  const REGIONS = { FR: 'France', CA: 'Canada', BE: 'Belgique', CH: 'Suisse', LU: 'Luxembourg' };
+
+  function ecranReglages(encoreActuel) {
+    if (!avatarCourant) {
+      if (!stockageOk) { ecranAvatars(encoreActuel); return; }
+      apresAvatar = '#/reglages';
+      location.hash = '#/avatars';
+      return;
+    }
+    const avatar = avatarCourant;
+    const r = reglagesDe(avatar);
+
+    function option(reglage, valeur, contenu, classe) {
+      return '<button class="option' + (classe ? ' ' + classe : '') + '" type="button" data-reglage="' + reglage +
+        '" data-valeur="' + echapper(String(valeur)) + '" aria-pressed="' + (String(r[reglage]) === String(valeur)) + '">' +
+        contenu + '</button>';
+    }
+
+    function blocVoix() {
+      const voix = VX.voixFrancaises();
+      if (voix.length === 0) {
+        return '<p class="info">Aucune voix française n\'est installée sur cet appareil.</p>';
+      }
+      const choisie = VX.voixChoisie();
+      let html = '<p class="consigne">Choisis une voix, puis touche Essayer.</p><div class="options">';
+      // Voix de France d'abord.
+      voix.slice().sort(function (a, b) {
+        return (/^fr[-_]FR/i.test(b.lang) ? 1 : 0) - (/^fr[-_]FR/i.test(a.lang) ? 1 : 0);
+      }).forEach(function (v) {
+        const region = REGIONS[(v.lang.split(/[-_]/)[1] || '').toUpperCase()];
+        html += '<button class="option" type="button" data-reglage="voix" data-valeur="' + echapper(v.voiceURI) +
+          '" aria-pressed="' + (choisie && choisie.voiceURI === v.voiceURI) + '">' +
+          echapper(v.name.replace(/\s*\(français.*\)\s*$/i, '')) +
+          (region ? ' <small>(' + region + ')</small>' : '') + '</button>';
+      });
+      html += '</div><h3>Vitesse</h3><div class="options">' +
+        option('vitesse', 'normale', 'Normale') + option('vitesse', 'lente', 'Lente') +
+        '</div><button class="bouton secondaire" type="button" id="essayer">Essayer la voix</button>';
+      return html;
+    }
+
+    afficher(
+      lienRetour('#/paquets', 'Mes paquets') +
+      '<h1>Réglages</h1>' +
+      '<p class="info">Ces réglages sont ceux de ton avatar : <strong>' + nomAvatar(avatar) + '</strong>.</p>' +
+      '<section class="bloc"><h2>Police</h2><p class="consigne">Choisis la police la plus facile à lire.</p><div class="options">' +
+      option('police', 'luciole', '<span class="apercu-luciole">Luciole</span>') +
+      option('police', 'lexend', '<span class="apercu-lexend">Lexend</span>') +
+      '</div></section>' +
+      '<section class="bloc"><h2>Taille du texte</h2><p class="consigne">Choisis la taille du texte.</p><div class="options">' +
+      [1, 2, 3].map(function (t) { return option('taille', t, '<span class="apercu-taille-' + t + '">' + TAILLES[t] + '</span>'); }).join('') +
+      '</div></section>' +
+      '<section class="bloc" id="bloc-voix"><h2>Voix</h2>' + blocVoix() + '</section>' +
+      '<p><a class="lien" href="#/confidentialite">Confidentialité</a></p>',
+      'Réglages'
+    );
+
+    function brancher(racine) {
+      racine.querySelectorAll('.option').forEach(function (b) {
+        b.addEventListener('click', function () {
+          const reglage = b.dataset.reglage;
+          r[reglage] = reglage === 'taille' ? Number(b.dataset.valeur) : b.dataset.valeur;
+          avatar.reglages = Object.assign({}, r);
+          appliquerReglages(r);
+          S.enregistrerAvatar(avatar).catch(function () {});
+          app.querySelectorAll('.option[data-reglage="' + reglage + '"]').forEach(function (o) {
+            o.setAttribute('aria-pressed', String(o === b));
+          });
+        });
+      });
+      const essayer = racine.querySelector('#essayer');
+      if (essayer) {
+        essayer.addEventListener('click', function () {
+          VX.lire('Bonjour ! Je lis les consignes et les questions pour toi.');
+        });
+      }
+    }
+    brancher(app);
+
+    // Les voix peuvent arriver après l'affichage : on complète alors le bloc Voix.
+    let nbVoix = VX.voixFrancaises().length;
+    VX.quandPretes(function () {
+      if (!encoreActuel() || VX.voixFrancaises().length === nbVoix) return;
+      nbVoix = VX.voixFrancaises().length;
+      const bloc = document.getElementById('bloc-voix');
+      bloc.innerHTML = '<h2>Voix</h2>' + blocVoix();
+      ajouterLecture(bloc);
+      brancher(bloc);
+    });
+  }
+
+  // ---------- Confidentialité (règle 8) ----------
+
+  function ecranConfidentialite() {
+    afficher(
+      lienRetour(avatarCourant ? '#/reglages' : '#/avatars', 'Retour') +
+      '<h1>Confidentialité</h1>' +
+      '<section class="bloc"><h2>Ce que l\'app garde</h2><ul class="liste-simple">' +
+      '<li>Ton avatar : un animal et une couleur. Jamais ton prénom.</li>' +
+      '<li>Tes réponses aux cartes, pour savoir quand les revoir.</li>' +
+      '<li>Le nombre de séances, pour faire pousser ta plante.</li>' +
+      '<li>Tes réglages : police, taille du texte, voix.</li>' +
+      '</ul></section>' +
+      '<section class="bloc"><h2>Où ?</h2>' +
+      '<p>Seulement sur cet appareil. Rien ne part sur Internet.</p>' +
+      '<p>Pas de compte, pas de cookie, pas de publicité.</p>' +
+      '<p>La voix qui lit est celle de l\'appareil. Elle aussi reste sur l\'appareil.</p></section>' +
+      '<section class="bloc"><h2>Comment tout effacer ?</h2>' +
+      '<p>En classe : demande à ton enseignant ou à ton enseignante.</p>' +
+      '<p>À la maison : supprime l\'app de l\'écran d\'accueil. Tout est effacé.</p></section>' +
+      '<section class="bloc"><h2>Crédits</h2>' +
+      '<p>Police Luciole © Laurent Bourcellier &amp; Jonathan Fabreguettes (Perez), 2019-2026, typographies.fr. ' +
+      'Licence Creative Commons Attribution 4.0 International : creativecommons.org/licenses/by/4.0/deed.fr. ' +
+      'Fichiers non modifiés.</p>' +
+      '<p>Police Lexend © 2019 The Lexend Project Authors. Licence SIL Open Font License 1.1 : openfontlicense.org.</p>' +
+      '</section>' +
+      piedDePage(),
+      'Confidentialité'
+    );
   }
 
   // ---------- Atelier enseignant (minimal) ----------
@@ -967,6 +1181,7 @@
   // ---------- Navigation ----------
 
   function router() {
+    VX.arreter(); // changer d'écran coupe la voix
     const numero = ++ecranCourant;
     const encoreActuel = function () { return numero === ecranCourant; };
     const morceaux = (location.hash.replace(/^#\/?/, '') || '').split('/');
@@ -983,6 +1198,10 @@
       ecranAvatars(encoreActuel);
     } else if (morceaux[0] === 'avatar' && morceaux[1] === 'nouveau') {
       ecranNouvelAvatar(encoreActuel);
+    } else if (morceaux[0] === 'reglages') {
+      ecranReglages(encoreActuel);
+    } else if (morceaux[0] === 'confidentialite') {
+      ecranConfidentialite();
     } else if (morceaux[0] === 'atelier') {
       ecranAtelier(encoreActuel);
     } else if (avatarCourant || !stockageOk) {
@@ -1002,13 +1221,15 @@
       .then(function () { return S.lireReglage('decalageJours', 0); })
       .then(function (n) { decalageJours = Number(n) || 0; })
       .then(function () { return idMemorise ? S.lireAvatar(idMemorise) : null; })
-      .then(function (a) { if (a) avatarCourant = a; })
+      .then(function (a) { if (a) memoriserAvatar(a); })
       .catch(function () { stockageOk = false; });
   }
 
   demarrer().then(function () {
     window.addEventListener('hashchange', router);
     router();
+    // Les voix de l'appareil arrivent parfois après le premier affichage.
+    VX.quandPretes(function () { ajouterLecture(app); });
     // Charge tous les paquets en arrière-plan : le service worker les garde pour le hors ligne.
     chargerListe().catch(function () {});
   });
