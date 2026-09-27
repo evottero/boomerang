@@ -282,7 +282,20 @@ function adaptateur(sb) {
   };
 }
 
-const sb = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'), {
+// Clé de service fournie automatiquement par Supabase : ancien nom (SUPABASE_SERVICE_ROLE_KEY)
+// ou nouveau système de clés (SUPABASE_SECRET_KEYS, objet JSON { "default": "sb_secret_…" }).
+function cleService() {
+  const ancienne = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (ancienne) return ancienne;
+  try {
+    const cles = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}');
+    return cles.default || Object.values(cles)[0] || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+const sb = createClient(Deno.env.get('SUPABASE_URL'), cleService(), {
   auth: { persistSession: false }
 });
 const db = adaptateur(sb);

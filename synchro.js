@@ -9,7 +9,7 @@
 
   // Adresse de la fonction : https://<référence du projet>.supabase.co/functions/v1/boomerang
   // Vide = synchronisation désactivée (l'app fonctionne comme avant, sans classe).
-  const URL_FONCTION = '';
+  const URL_FONCTION = 'https://krifwnmqmiangtckeirg.supabase.co/functions/v1/boomerang';
   const DELAI_MS = 10000;
 
   const RE_CLASSE = /^[A-HJ-NP-Z2-9]{6}$/;

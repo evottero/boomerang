@@ -14,7 +14,7 @@
   const VX = window.Voix;
   const SY = window.Synchro;
   const app = document.getElementById('app');
-  const VERSION_APP = '0.6.1';
+  const VERSION_APP = '0.6.2';
 
   const DISCIPLINES = {
     histoire: { nom: 'Histoire', icone: '🏰' },
