@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Règle 3 : aucune ressource hors du site. Le navigateur bloque tout autre domaine. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Révision CM2</title>
+  <meta name="description" content="Réviser ses leçons de CM2 avec des fiches, des cartes et des quiz. Aucune donnée ne quitte l'appareil.">
+  <meta name="theme-color" content="#e9dcc3">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+
+  <!-- iOS / iPadOS : installation sur l'écran d'accueil -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Révision">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="page">
+    <img class="logo" src="icons/icon-192.png" alt="" width="96" height="96">
+    <h1>Révision CM2</h1>
+    <p class="lead">Lot 0 : le squelette de l'application.</p>
+
+    <section class="etat" aria-live="polite">
+      <p id="etat-installation">Vérification de l'installation…</p>
+      <p id="etat-horsligne">Vérification du mode hors ligne…</p>
+    </section>
+
+    <section class="aide" id="aide-installation" hidden>
+      <h2>Installer sur l'iPad</h2>
+      <ol>
+        <li>Touche le bouton <strong>Partager</strong> de Safari.</li>
+        <li>Choisis <strong>Sur l'écran d'accueil</strong>.</li>
+        <li>Touche <strong>Ajouter</strong>.</li>
+      </ol>
+    </section>
+
+    <p class="version">Version <span id="version">0.0.1</span></p>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
