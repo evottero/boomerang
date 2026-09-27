@@ -39,7 +39,7 @@ Puis dans Supabase : **Edge Functions** > **Secrets** (ou **Project Settings** >
 | --- | --- |
 | `BOOMERANG_POIVRE` | le résultat de `openssl rand -hex 32` |
 | `BOOMERANG_CLE_ENSEIGNANT` | le résultat de `openssl rand -base64 18` (24 caractères ; 12 au minimum), à ranger dans ton gestionnaire de mots de passe : tu la taperas une fois dans l'atelier |
-| `BOOMERANG_ORIGINE` | `https://evottero.github.io` |
+| `BOOMERANG_ORIGINE` | `https://boomerang.tableautablettes.fr,https://evottero.github.io` (plusieurs adresses possibles, séparées par une virgule, sans espace ni barre finale) |
 
 Ne change plus jamais `BOOMERANG_POIVRE` : tous les codes élèves deviendraient faux.
 

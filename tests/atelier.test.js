@@ -99,7 +99,7 @@ test('format : niveau accompagne (et ancienne écriture), accents du paquet', fu
 });
 
 test('QR code : taille et version selon la longueur du lien', function () {
-  const court = QR.encoder('https://evottero.github.io/revision-cm2/#/p/hist-symboles-republique', 'M');
+  const court = QR.encoder('https://boomerang.tableautablettes.fr/#/p/hist-symboles-republique', 'M');
   assert.strictEqual(court.taille, court.version * 4 + 17);
   assert.ok(court.version >= 4 && court.version <= 5);
   assert.throws(function () { QR.encoder('x'.repeat(400), 'M'); }, /trop long/);

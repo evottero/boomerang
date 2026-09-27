@@ -12,7 +12,7 @@ function chargerLogique() {
   if (debut === -1 || fin === -1) throw new Error('Repères de logique introuvables dans index.ts');
   const code = source.slice(debut, fin);
   // eslint-disable-next-line no-new-func
-  return new Function(code + '\nreturn { traiter: traiter, plusAvancee: plusAvancee, codeRefuse: codeRefuse };')();
+  return new Function(code + '\nreturn { traiter: traiter, plusAvancee: plusAvancee, codeRefuse: codeRefuse, listeOrigines: listeOrigines, origineAutorisee: origineAutorisee };')();
 }
 
 function baseMemoire() {

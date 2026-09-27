@@ -8,7 +8,8 @@
  *   BOOMERANG_POIVRE           longue chaîne aléatoire, sert au calcul des empreintes
  *   BOOMERANG_CLE_ENSEIGNANT   clé d'administration (12 caractères au moins) : sert seulement à créer
  *                              une classe et à définir le code enseignant d'une classe
- *   BOOMERANG_ORIGINE          adresse du site, par exemple https://evottero.github.io
+ *   BOOMERANG_ORIGINE          adresse(s) du site, séparées par des virgules, par exemple
+ *                              https://boomerang.tableautablettes.fr,https://evottero.github.io
  * SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont fournis automatiquement par Supabase.
  */
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -26,6 +27,15 @@ const RE_CLASSE = /^[A-HJ-NP-Z2-9]{6}$/;
 const RE_AVATAR = /^[a-z]{2,20}-[a-z]{2,20}$/;
 const RE_CODE = /^[0-9]{4}$/;
 const RE_PAQUET = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+// Origines autorisées à appeler la fonction (en-tête CORS) : liste séparée par des virgules.
+function listeOrigines(texte) {
+  return String(texte || '').split(',').map(function (o) { return o.trim().replace(/\/+$/, ''); }).filter(Boolean);
+}
+
+function origineAutorisee(liste, origine) {
+  return liste.indexOf(origine) !== -1 ? origine : liste[0];
+}
 
 function reponse(statut, corps) {
   return { statut: statut, corps: corps };
@@ -390,11 +400,12 @@ const env = {
   poivre: Deno.env.get('BOOMERANG_POIVRE') || '',
   cleEnseignant: Deno.env.get('BOOMERANG_CLE_ENSEIGNANT') || ''
 };
-const ORIGINE = Deno.env.get('BOOMERANG_ORIGINE') || 'https://evottero.github.io';
+const ORIGINES = listeOrigines(Deno.env.get('BOOMERANG_ORIGINE') || 'https://boomerang.tableautablettes.fr');
 
 Deno.serve(async function (req) {
   const entetes = {
-    'Access-Control-Allow-Origin': ORIGINE,
+    'Access-Control-Allow-Origin': origineAutorisee(ORIGINES, req.headers.get('origin') || ''),
+    'Vary': 'Origin',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'content-type',
     'Content-Type': 'application/json; charset=utf-8',

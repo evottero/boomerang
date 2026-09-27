@@ -244,3 +244,12 @@ test('purge du 31 août : les paquets publiés disparaissent aussi', async funct
   db.purger();
   assert.strictEqual(db.donnees.paquets.size, 0);
 });
+
+test('origines autorisées : nouvelle adresse et ancienne pendant la transition', function () {
+  const liste = L.listeOrigines(' https://boomerang.tableautablettes.fr/ , https://evottero.github.io ');
+  assert.deepStrictEqual(liste, ['https://boomerang.tableautablettes.fr', 'https://evottero.github.io']);
+  assert.strictEqual(L.origineAutorisee(liste, 'https://evottero.github.io'), 'https://evottero.github.io');
+  assert.strictEqual(L.origineAutorisee(liste, 'https://boomerang.tableautablettes.fr'), 'https://boomerang.tableautablettes.fr');
+  // Origine inconnue : on renvoie la première, le navigateur bloquera l'appel
+  assert.strictEqual(L.origineAutorisee(liste, 'https://site-inconnu.example'), 'https://boomerang.tableautablettes.fr');
+});

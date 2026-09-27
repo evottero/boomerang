@@ -4,13 +4,13 @@
 // Avec le réseau, l'app prend toujours la dernière version en ligne ;
 // le cache ne sert que hors ligne ou si le réseau est trop lent.
 // Change VERSION à chaque mise en ligne pour renouveler la copie hors ligne.
-const VERSION = 'v0.7.0';
+const VERSION = 'v0.7.1';
 const CACHE = 'revision-cm2-' + VERSION;
 // Les paquets ouverts ont leur propre cache, conservé d'une version à l'autre.
 const CACHE_PAQUETS = 'revision-cm2-paquets';
 const DELAI_RESEAU = 4000; // au-delà, on sert la copie en cache
 
-// Chemins relatifs : fonctionne à la racine comme dans /revision-cm2/ sur GitHub Pages.
+// Chemins relatifs : fonctionne à la racine du domaine (boomerang.tableautablettes.fr) comme dans un sous-dossier.
 const FICHIERS = [
   './',
   'index.html',

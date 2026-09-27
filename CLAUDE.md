@@ -13,7 +13,7 @@ Webapp installable (PWA) qui tourne sur iPad et iPhone, sans compte nominatif. U
 
 Le Mode Classe fonctionne entièrement hors ligne ; la synchronisation ne fait que recopier la progression entre les appareils d'un même élève. Le Mode Photo reste désactivé par défaut et ne s'active qu'après validation (section 15).
 
-Architecture retenue : site statique (HTML, CSS, JavaScript), hébergé gratuitement (GitHub Pages ou Netlify), service worker pour le hors ligne, stockage local IndexedDB, qui reste la référence. Synchronisation par un projet Supabase gratuit, en région Europe (Francfort) : la base n'est jamais accessible directement depuis l'app, tout passe par une Edge Function. Aucun compte nominatif, aucun outil d'analyse d'audience.
+Architecture retenue : site statique (HTML, CSS, JavaScript), hébergé gratuitement sur GitHub Pages à l'adresse https://boomerang.tableautablettes.fr (racine du domaine), service worker pour le hors ligne, stockage local IndexedDB, qui reste la référence. Synchronisation par un projet Supabase gratuit, en région Europe (Francfort) : la base n'est jamais accessible directement depuis l'app, tout passe par une Edge Function. Aucun compte nominatif, aucun outil d'analyse d'audience.
 
 ## 2. Objectifs et périmètre
 
@@ -137,7 +137,7 @@ Ludification sobre : une plante qui pousse au fil des séances, par avatar. Pas 
 | Mise en pause | Le projet Supabase gratuit se met en pause après 7 jours sans activité : le relancer depuis le tableau de bord Supabase après chaque vacances |
 | Affichage | Portrait et paysage, du smartphone 6 pouces à l'iPad 13 pouces. Zones sûres respectées |
 | Poids | Moins de 2 Mo hors polices et modèle OCR. Chargement en moins de 3 secondes en 4G |
-| Hébergement | Statique, gratuit : GitHub Pages ou Netlify. Fonction de synchronisation sur Supabase |
+| Hébergement | Statique, gratuit : GitHub Pages, domaine personnalisé https://boomerang.tableautablettes.fr, à la racine (fichier `CNAME` du dépôt). Tous les chemins sont relatifs : manifeste, service worker, liens et QR codes suivent l'adresse réelle. Fonction de synchronisation sur Supabase, qui n'accepte que les origines listées dans le secret `BOOMERANG_ORIGINE` |
 | Sauvegarde | Export et import manuel de la progression d'un avatar en fichier |
 
 ## 10. Format de données des paquets
@@ -306,5 +306,7 @@ Codé le 27/09/2026 (version 0.7.0), après validation du lot 5 bis.
 - [ ] Licence de la police Luciole pour l'embarquement dans un site.
 - [ ] Crédit de la police Luciole dans la page Confidentialité.
 - [ ] Qualité de Tesseract.js sur une écriture de cahier CM2, avant le lot 7.
+- [ ] Changement d'adresse (boomerang.tableautablettes.fr) : les données locales d'un appareil sont liées à l'adresse du site. Sur chaque appareil, installer l'app depuis la nouvelle adresse, retaper le code de classe et retrouver son avatar avec son code élève (la progression revient du serveur). Les avatars sans classe et les réglages (police, taille, voix) repartent de zéro.
+- [ ] Une fois tous les appareils passés à la nouvelle adresse, retirer https://evottero.github.io du secret `BOOMERANG_ORIGINE`.
 - [ ] Information des familles sur l'ENT.
 - [ ] Synchronisation : avis du DPD de l'académie avant la mise en service en classe.
