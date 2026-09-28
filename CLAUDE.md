@@ -309,7 +309,7 @@ Codé le 27/09/2026 (version 0.7.0), après validation du lot 5 bis.
 - [ ] Conservation de l'IndexedDB sur iPadOS pour une PWA installée, à tester sur le parc réel.
 - [ ] Licence de la police Luciole pour l'embarquement dans un site.
 - [ ] Crédit de la police Luciole dans la page Confidentialité.
-- [ ] Compléter les mentions légales (`mentions-legales.html`, zones entre crochets) : éditeur, directeur de la publication, adresse de Supabase, responsable du traitement, droits sur les contenus et le logo.
+- [ ] Compléter les mentions légales (`mentions-legales.html`, texte fourni par Eric le 28/09/2026) : il reste l'adresse e-mail de contact et la date de mise en ligne, entre crochets.
 - [ ] Qualité de Tesseract.js sur une écriture de cahier CM2, avant le lot 7.
 - [ ] Changement d'adresse (boomerang.tableautablettes.fr) : les données locales d'un appareil sont liées à l'adresse du site. Sur chaque appareil, installer l'app depuis la nouvelle adresse, retaper le code de classe et retrouver son avatar avec son code élève (la progression revient du serveur). Les avatars sans classe et les réglages (police, taille, voix) repartent de zéro.
 - [ ] Une fois tous les appareils passés à la nouvelle adresse, retirer https://evottero.github.io du secret `BOOMERANG_ORIGINE`.

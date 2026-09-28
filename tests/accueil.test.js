@@ -81,12 +81,25 @@ test('accès : l\'app renvoie à l\'accueil sans code de classe ; l\'icône ouvr
   assert.ok(/ecrireReglage\('acces', true\)/.test(js) && /location\.replace\('app\.html' \+ location\.hash\)/.test(js));
 });
 
-test('mentions légales : éditeur, hébergeur, prestataire de synchronisation, parties à compléter', function () {
+test('mentions légales : texte fourni par Eric, deux zones restant à compléter', function () {
   const m = lire('mentions-legales.html');
-  ['Éditeur du site', 'GitHub Pages', 'GitHub, Inc.', 'Supabase', 'Francfort'].forEach(function (t) {
-    assert.ok(m.indexOf(t) !== -1, t);
+  ['Éditeur du site', 'Eric Vottero, entrepreneur individuel, sous la marque iCARE by Eric.', 'Statut du site',
+    'GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis. Service GitHub Pages.',
+    'Supabase Pte. Ltd., 65 Chulia Street #38-02/03, OCBC Centre, Singapour 049513.',
+    'Responsable du traitement : Eric Vottero.', 'effacées automatiquement chaque 31 août',
+    'href="https://www.cnil.fr"', 'Propriété intellectuelle'
+  ].forEach(function (t) { assert.ok(m.indexOf(t) !== -1, t); });
+  assert.deepStrictEqual((m.match(/class="a-completer">\[([^\]]+)\]/g) || []).map(function (z) { return z.replace(/.*\[/, '').replace(']', ''); }),
+    ['adresse e-mail de contact', 'date de mise en ligne']);
+});
+
+test('en-têtes publics : icône officielle Boomerang, plus de plante', function () {
+  ['index.html', 'mentions-legales.html', 'confidentialite.html'].forEach(function (f) {
+    const p = lire(f);
+    assert.ok(p.indexOf('src="icons/boomerang.png"') !== -1, f);
+    assert.ok(p.indexOf('<img src="icons/icon-192.png"') === -1, f);
   });
-  assert.ok((m.match(/class="a-completer">\[/g) || []).length >= 5);
+  assert.ok(fs.existsSync(path.join(racine, 'icons/boomerang.png')));
 });
 
 test('hors ligne : les nouvelles pages sont mises en cache par le service worker', function () {

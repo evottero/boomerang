@@ -4,7 +4,7 @@
 // Avec le réseau, l'app prend toujours la dernière version en ligne ;
 // le cache ne sert que hors ligne ou si le réseau est trop lent.
 // Change VERSION à chaque mise en ligne pour renouveler la copie hors ligne.
-const VERSION = 'v0.8.0';
+const VERSION = 'v0.8.1';
 const CACHE = 'revision-cm2-' + VERSION;
 // Les paquets ouverts ont leur propre cache, conservé d'une version à l'autre.
 const CACHE_PAQUETS = 'revision-cm2-paquets';
@@ -20,6 +20,7 @@ const FICHIERS = [
   'confidentialite.html',
   'mentions-legales.html',
   'icons/logo-icare.png',
+  'icons/boomerang.png',
   'styles.css',
   'validation.js',
   'moteur.js',
