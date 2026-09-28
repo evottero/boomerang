@@ -14,7 +14,7 @@
   const VX = window.Voix;
   const SY = window.Synchro;
   const app = document.getElementById('app');
-  const VERSION_APP = '0.7.1';
+  const VERSION_APP = '0.8.0';
 
   const DISCIPLINES = {
     histoire: { nom: 'Histoire', icone: '🏰' },
@@ -87,6 +87,7 @@
   let classeAppareil = null;    // code de la classe, saisi une fois par appareil (lot 5 bis)
   let sansClasse = false;       // l'appareil est utilisé sans synchronisation
   let codeCourant = null;       // code élève de l'avatar ouvert, gardé en mémoire seulement
+  let accesAccorde = false;     // code de classe validé sur la page d'accueil (index.html)
 
   // Réglages d'affichage et de voix, propres à chaque avatar (iPad partagé).
   const REGLAGES_DEFAUT = { police: 'luciole', taille: 1, vitesse: 'normale', voix: null };
@@ -215,7 +216,7 @@
     app.classList.toggle('page-large', !!(options && options.large));
     app.innerHTML = html;
     ajouterLecture(app);
-    document.title = titre ? titre + ' – Révision CM2' : 'Révision CM2';
+    document.title = titre ? titre + ' – Boomerang' : 'Boomerang';
     window.scrollTo(0, 0);
     // VoiceOver annonce le nouvel écran.
     const h1 = app.querySelector('h1');
@@ -1605,12 +1606,27 @@
       .then(function (c) { classeAppareil = c; })
       .then(function () { return S.lireReglage('sansClasse', false); })
       .then(function (v) { sansClasse = v === true; })
+      .then(function () { return S.lireReglage('acces', false); })
+      .then(function (v) {
+        accesAccorde = v === true;
+        // Appareils qui avaient déjà une classe avant la page d'accueil : l'accès est acquis.
+        if (!accesAccorde && classeAppareil) { accesAccorde = true; return S.ecrireReglage('acces', true); }
+      })
       .then(function () { return idMemorise ? S.lireAvatar(idMemorise) : null; })
       .then(function (a) { if (a) memoriserAvatar(a); })
       .catch(function () { stockageOk = false; });
   }
 
+  // Accès réservé aux classes participantes : sans code de classe, retour à la page d'accueil.
+  function accesSession() {
+    try { return sessionStorage.getItem('boomerang-acces') === '1'; } catch (e) { return false; }
+  }
+
   demarrer().then(function () {
+    if (SY.active() && !accesAccorde && !accesSession()) {
+      location.replace('./' + location.hash);
+      return;
+    }
     window.addEventListener('hashchange', router);
     router();
     // Les voix de l'appareil arrivent parfois après le premier affichage.

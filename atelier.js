@@ -126,7 +126,8 @@ Leçon :
     }
 
     function lienCourt(id) {
-      return location.origin + location.pathname.replace(/index\.html$/, '') + '#/p/' + id;
+      // Racine du site : un appareil sans code passe par la page d'accueil, qui transmet le lien à l'app.
+      return location.origin + location.pathname.replace(/(index|app)\.html$/, '') + '#/p/' + id;
     }
 
     function proposerId(discipline, titre) {
@@ -359,7 +360,8 @@ Leçon :
             pageNouveau = null;
             ouvert = false;
             c.reinitialiser();
-            location.hash = '#/';
+            try { sessionStorage.removeItem('boomerang-acces'); } catch (e) { /* sans conséquence */ }
+            location.replace('./'); // plus de code de classe : retour à la page d'accueil
           });
         });
         document.getElementById('fermer').addEventListener('click', function () {

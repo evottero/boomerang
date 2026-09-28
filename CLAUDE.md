@@ -13,7 +13,7 @@ Webapp installable (PWA) qui tourne sur iPad et iPhone, sans compte nominatif. U
 
 Le Mode Classe fonctionne entièrement hors ligne ; la synchronisation ne fait que recopier la progression entre les appareils d'un même élève. Le Mode Photo reste désactivé par défaut et ne s'active qu'après validation (section 15).
 
-Architecture retenue : site statique (HTML, CSS, JavaScript), hébergé gratuitement sur GitHub Pages à l'adresse https://boomerang.tableautablettes.fr (racine du domaine), service worker pour le hors ligne, stockage local IndexedDB, qui reste la référence. Synchronisation par un projet Supabase gratuit, en région Europe (Francfort) : la base n'est jamais accessible directement depuis l'app, tout passe par une Edge Function. Aucun compte nominatif, aucun outil d'analyse d'audience.
+Architecture retenue : site statique (HTML, CSS, JavaScript), hébergé gratuitement sur GitHub Pages à l'adresse https://boomerang.tableautablettes.fr (racine du domaine). La racine sert une page d'accueil publique (`index.html`) ; l'app est derrière elle (`app.html`) et n'est accessible qu'avec un code de classe valide. Le site comprend aussi les pages publiques `confidentialite.html` et `mentions-legales.html`, service worker pour le hors ligne, stockage local IndexedDB, qui reste la référence. Synchronisation par un projet Supabase gratuit, en région Europe (Francfort) : la base n'est jamais accessible directement depuis l'app, tout passe par une Edge Function. Aucun compte nominatif, aucun outil d'analyse d'audience.
 
 ## 2. Objectifs et périmètre
 
@@ -32,7 +32,7 @@ Périmètre V1 : Mode Classe, lecteur de paquets, 3 activités (fiche, cartes, q
 
 Ces règles s'imposent au code. Vérifie-les à chaque étape. Chaque règle a un test de recette (section 14).
 
-1. Aucun compte nominatif, aucune adresse mail, aucun prénom demandé. L'élève est représenté par un avatar (animal, couleur), unique dans la classe, protégé par un code élève à 4 chiffres. La classe est identifiée par un code de classe de 6 caractères, saisi une fois par appareil.
+1. Accès réservé aux classes participantes : la page d'accueil demande un code de classe, vérifié par la fonction Supabase. L'appareil le retient ; aux visites suivantes, la page d'accueil est sautée. Code faux : « Code inconnu. Vérifie auprès de ton enseignant. », et 5 codes faux bloquent la saisie une heure sur l'appareil. Sans code, `app.html` renvoie à la page d'accueil. Aucun compte nominatif, aucune adresse mail, aucun prénom demandé. L'élève est représenté par un avatar (animal, couleur), unique dans la classe, protégé par un code élève à 4 chiffres. La classe est identifiée par un code de classe de 6 caractères, saisi une fois par appareil.
 2. Le serveur ne stocke que : le code de classe, l'empreinte du code enseignant de la classe (jamais le code en clair), les paquets publiés par l'enseignant pour sa classe (contenu pédagogique, aucune donnée d'élève), l'avatar, l'empreinte du code élève (jamais le code en clair), l'état de la plante sous la forme d'un simple nombre de séances par avatar (sans date ni lieu) et l'état des cartes. S'y ajoutent des champs techniques : le sel (sert au calcul des empreintes), le nombre d'essais faux et la fin du blocage, pour le code élève comme pour le code enseignant. Les réglages (police, taille, voix) restent sur l'appareil. IndexedDB reste la référence ; le serveur n'en est qu'une copie.
 3. Aucun script tiers : pas d'analytics, pas de police Google chargée à distance, pas de CDN au moment de l'usage. Toutes les ressources sont embarquées dans le site.
 4. Aucun cookie.
@@ -130,7 +130,7 @@ Ludification sobre : une plante qui pousse au fil des séances, par avatar. Pas 
 | --- | --- |
 | Pile | HTML, CSS, JavaScript sans framework lourd (ou Vite + Preact si utile). Aucune dépendance chargée à l'usage |
 | Cibles | Safari iPadOS et iOS récents, Chrome Android, Safari macOS |
-| Installation | Manifeste web + icônes, installable via « Sur l'écran d'accueil » |
+| Installation | Manifeste web + icônes, installable via « Sur l'écran d'accueil ». Nom de l'app installée : « Boomerang ». `start_url` : `app.html`, qui ouvre l'app directement si l'appareil a déjà un code de classe, sinon renvoie à la page d'accueil |
 | Hors ligne | Service worker : le site et les paquets déjà ouverts restent disponibles sans réseau |
 | Stockage | IndexedDB, qui reste la référence. Recommander l'installation sur l'écran d'accueil (Safari peut effacer les données d'un site non installé) |
 | Synchronisation | Projet Supabase gratuit, région Europe (Francfort). Une Edge Function unique, tables inaccessibles depuis l'app. Au retour du réseau, fusion carte par carte : la progression la plus avancée l'emporte (boîte la plus haute, puis révision la plus récente). Plante : le plus grand nombre de séances l'emporte |
@@ -222,6 +222,8 @@ Prompt de génération : il est intégré à l'atelier enseignant (bouton « Cop
 
 | Écran | Contenu | Côté |
 | --- | --- | --- |
+| Page d'accueil (`index.html`, publique) | Charte Sable (fond `#F6E7CE`, texte `#3D2B1F`, bouton ambre `#E8A860`), mobile d'abord. En-tête : icône, titre « Boomerang », logo iCARE en haut à droite (lien vers tableautablettes.fr). Accroche « Les cartes qu'on ne sait pas reviennent. Jusqu'à ce qu'on les sache. » Trois blocs : « Se tester plutôt que relire », « Revoir juste avant d'oublier », « Pensé pour tous les élèves : voix, police Luciole, aucun chronomètre ». Ligne « Aucun nom, aucun compte, aucune publicité. Un avatar et un code suffisent. » Encadré « Entrer dans Boomerang » : champ « Code de classe », bouton « Entrer », puis « Boomerang est réservé aux classes participantes. Vous êtes enseignant et l'outil vous intéresse ? » avec le lien « Me contacter » (tableautablettes.fr/contact.html). Pied de page : « Confidentialité », « Mentions légales » | Public |
+| Confidentialité et Mentions légales (pages publiques) | Données conservées, emplacement, durée, effacement, crédits ; éditeur, hébergeur (GitHub Pages), prestataire de synchronisation (Supabase, région Europe) | Public |
 | Choix de l'avatar | 44 avatars possibles : 11 animaux (renard, panda, grenouille, hibou, tortue, dauphin, lion, lapin, hérisson, abeille, chat) déclinés en 4 couleurs (rouge, jaune, vert, bleu). Les avatars déjà créés ne changent pas. L'écran n'affiche que les avatars créés sur cet appareil, plus le bouton « Nouvel avatar ». Sur un même appareil, un avatar déjà pris ne peut plus être choisi | Élève |
 | Mes paquets | Paquets par discipline, pastille « cartes à revoir ». Avec une classe : seulement les paquets publiés pour la classe, gardés sur l'appareil pour le hors ligne. Sans classe : les fichiers du dossier `paquets/` | Élève |
 | Paquet | Trois gros boutons : Fiche, Cartes, Quiz | Élève |
@@ -293,6 +295,8 @@ Codé le 27/09/2026 (version 0.7.0), après validation du lot 5 bis.
 - [ ] Un JSON mal formé est refusé avec un message clair.
 - [ ] Un paquet non relu ne peut pas être exporté.
 - [ ] « Publier » reste inactif tant qu'un élément n'est pas relu.
+- [ ] Sans code de classe, l'app n'est pas accessible : `app.html` renvoie à la page d'accueil.
+- [ ] Un appareil qui a déjà un code saute la page d'accueil, y compris depuis l'icône de l'écran d'accueil.
 - [ ] Un élève ne voit que les paquets de sa classe.
 - [ ] Toutes les consignes sont lisibles par la synthèse vocale et par VoiceOver.
 - [ ] Contraste AA vérifié sur tous les écrans.
@@ -305,6 +309,7 @@ Codé le 27/09/2026 (version 0.7.0), après validation du lot 5 bis.
 - [ ] Conservation de l'IndexedDB sur iPadOS pour une PWA installée, à tester sur le parc réel.
 - [ ] Licence de la police Luciole pour l'embarquement dans un site.
 - [ ] Crédit de la police Luciole dans la page Confidentialité.
+- [ ] Compléter les mentions légales (`mentions-legales.html`, zones entre crochets) : éditeur, directeur de la publication, adresse de Supabase, responsable du traitement, droits sur les contenus et le logo.
 - [ ] Qualité de Tesseract.js sur une écriture de cahier CM2, avant le lot 7.
 - [ ] Changement d'adresse (boomerang.tableautablettes.fr) : les données locales d'un appareil sont liées à l'adresse du site. Sur chaque appareil, installer l'app depuis la nouvelle adresse, retaper le code de classe et retrouver son avatar avec son code élève (la progression revient du serveur). Les avatars sans classe et les réglages (police, taille, voix) repartent de zéro.
 - [ ] Une fois tous les appareils passés à la nouvelle adresse, retirer https://evottero.github.io du secret `BOOMERANG_ORIGINE`.

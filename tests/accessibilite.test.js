@@ -129,7 +129,7 @@ test('polices embarquées : Luciole par défaut, Lexend en alternative, aucune U
   (css.match(/url\(([^)]*)\)/g) || []).forEach(function (u) {
     assert.ok(/url\('polices\//.test(u), u);
   });
-  const index = fs.readFileSync(path.join(racine, 'index.html'), 'utf8');
+  const index = fs.readFileSync(path.join(racine, 'app.html'), 'utf8');
   assert.ok(/data-police="luciole"/.test(index));
 });
 

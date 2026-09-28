@@ -1,0 +1,168 @@
+/*
+ * Page d'accueil, mentions légales et confidentialité publique : charte Sable.
+ * Fond #F6E7CE, texte #3D2B1F (11:1), bouton ambre #E8A860 avec texte encre (6,5:1).
+ * Police Luciole embarquée : aucune police chargée depuis un site extérieur.
+ */
+
+@font-face {
+  font-family: 'Luciole';
+  src: url('polices/Luciole-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Luciole';
+  src: url('polices/Luciole-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --fond: #f6e7ce;
+  --encre: #3d2b1f;
+  --ambre: #e8a860;
+  --blanc: #fffdf9;
+  --filet: #e0c9a3;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+html.verification body { visibility: hidden; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--fond);
+  color: var(--encre);
+  font-family: 'Luciole', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  text-align: left;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+a { color: var(--encre); font-weight: 700; }
+:focus-visible { outline: 3px solid var(--encre); outline-offset: 3px; }
+
+/* En-tête : icône, titre, logo iCARE en haut à droite */
+.entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1rem 1rem 0.5rem;
+}
+.marque { display: flex; align-items: center; gap: 0.7rem; }
+.marque img { border-radius: 22%; flex: none; }
+.marque h1 { margin: 0; font-size: 1.9rem; line-height: 1.5; }
+.logo-icare { display: inline-flex; min-width: 56px; min-height: 56px; border-radius: 50%; }
+.logo-icare img { display: block; width: 56px; height: 56px; }
+
+.contenu {
+  flex: 1;
+  width: 100%;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0.5rem 1rem 2rem;
+}
+
+.accroche { font-size: 1.55rem; font-weight: 700; line-height: 1.5; margin: 1rem 0 1.5rem; }
+
+/* Trois blocs courts : une colonne sur téléphone, trois côte à côte sur grand écran */
+.atouts { list-style: none; margin: 0 0 1.5rem; padding: 0; display: grid; gap: 0.75rem; }
+@media (min-width: 700px) {
+  .atouts { grid-template-columns: repeat(3, 1fr); }
+}
+.atouts li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  background: var(--blanc);
+  border: 2px solid var(--filet);
+  border-radius: 14px;
+  font-weight: 700;
+}
+.atouts svg {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  fill: none;
+  stroke: var(--encre);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.promesse { margin: 0 0 1.75rem; font-size: 1.1rem; }
+
+/* Encadré d'accès */
+.acces {
+  padding: 1.25rem 1rem;
+  background: var(--blanc);
+  border: 3px solid var(--ambre);
+  border-radius: 18px;
+}
+.acces h2 { margin: 0 0 0.75rem; font-size: 1.35rem; line-height: 1.5; }
+.champ { display: block; font-weight: 700; margin-bottom: 0.35rem; }
+.ligne-code { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.ligne-code input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  min-height: 56px;
+  padding: 0.4rem 0.8rem;
+  border: 3px solid var(--encre);
+  border-radius: 12px;
+  background: var(--blanc);
+  color: var(--encre);
+  font: inherit;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+.ligne-code button {
+  flex: 0 0 auto;
+  min-height: 56px;
+  min-width: 7rem;
+  padding: 0.4rem 1.4rem;
+  background: var(--ambre);
+  color: var(--encre);
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ligne-code button:active { filter: brightness(0.95); }
+.message { font-weight: 700; min-height: 1.5em; margin: 0.6rem 0 0.25rem; }
+.invitation { margin: 0.5rem 0 0; }
+.invitation a { display: inline-flex; align-items: center; min-height: 44px; }
+
+/* Pied de page */
+.pied {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.5rem;
+  padding: 1rem 1rem 1.5rem;
+  border-top: 2px solid var(--filet);
+}
+.pied a { display: inline-flex; align-items: center; min-height: 44px; }
+
+/* Pages de texte (mentions légales, confidentialité) */
+.page-texte h2 { font-size: 1.25rem; line-height: 1.5; margin: 1.5rem 0 0.4rem; }
+.page-texte ul { padding-left: 1.25rem; }
+.page-texte li { margin-bottom: 0.35rem; }
+.a-completer { background: var(--ambre); padding: 0 0.25rem; border-radius: 4px; }
+.retour-accueil { display: inline-flex; align-items: center; min-height: 44px; }

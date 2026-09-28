@@ -4,7 +4,7 @@
 // Avec le réseau, l'app prend toujours la dernière version en ligne ;
 // le cache ne sert que hors ligne ou si le réseau est trop lent.
 // Change VERSION à chaque mise en ligne pour renouveler la copie hors ligne.
-const VERSION = 'v0.7.1';
+const VERSION = 'v0.8.0';
 const CACHE = 'revision-cm2-' + VERSION;
 // Les paquets ouverts ont leur propre cache, conservé d'une version à l'autre.
 const CACHE_PAQUETS = 'revision-cm2-paquets';
@@ -14,6 +14,12 @@ const DELAI_RESEAU = 4000; // au-delà, on sert la copie en cache
 const FICHIERS = [
   './',
   'index.html',
+  'app.html',
+  'accueil.js',
+  'accueil.css',
+  'confidentialite.html',
+  'mentions-legales.html',
+  'icons/logo-icare.png',
   'styles.css',
   'validation.js',
   'moteur.js',
@@ -118,7 +124,8 @@ self.addEventListener('fetch', function (event) {
   if (url.origin !== self.location.origin) return;
 
   if (requete.mode === 'navigate') {
-    event.respondWith(reseauDabord(requete.url, CACHE, 'index.html', true));
+    // Chaque page (accueil, app, mentions…) est gardée sous sa propre adresse, sans paramètres.
+    event.respondWith(reseauDabord(requete.url, CACHE, url.origin + url.pathname, true));
   } else if (url.pathname.indexOf('/paquets/') !== -1 && url.pathname.endsWith('.json')) {
     event.respondWith(reseauDabord(requete.url, CACHE_PAQUETS, requete.url, false));
   } else {
