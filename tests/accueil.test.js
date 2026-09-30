@@ -81,16 +81,19 @@ test('accès : l\'app renvoie à l\'accueil sans code de classe ; l\'icône ouvr
   assert.ok(/ecrireReglage\('acces', true\)/.test(js) && /location\.replace\('app\.html' \+ location\.hash\)/.test(js));
 });
 
-test('mentions légales : texte fourni par Eric, deux zones restant à compléter', function () {
+test('mentions légales : texte validé par Eric, plus aucune zone à compléter', function () {
   const m = lire('mentions-legales.html');
-  ['Éditeur du site', 'Eric Vottero, entrepreneur individuel, sous la marque iCARE by Eric.', 'Statut du site',
-    'GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis. Service GitHub Pages.',
+  ['<h2>Éditeur</h2>', 'Directeur de la publication : Eric Vottero.', '<h2>Statut</h2>',
+    'GitHub, Inc. (service GitHub Pages), 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.',
     'Supabase Pte. Ltd., 65 Chulia Street #38-02/03, OCBC Centre, Singapour 049513.',
-    'Responsable du traitement : Eric Vottero.', 'effacées automatiquement chaque 31 août',
-    'href="https://www.cnil.fr"', 'Propriété intellectuelle'
+    'Responsable du traitement : Eric Vottero.', 'href="https://tableautablettes.fr/contact.html"',
+    'href="https://www.cnil.fr"', 'Propriété intellectuelle', 'Dernière mise à jour : 29 septembre 2026.'
   ].forEach(function (t) { assert.ok(m.indexOf(t) !== -1, t); });
-  assert.deepStrictEqual((m.match(/class="a-completer">\[([^\]]+)\]/g) || []).map(function (z) { return z.replace(/.*\[/, '').replace(']', ''); }),
-    ['adresse e-mail de contact', 'date de mise en ligne']);
+  assert.ok(m.indexOf('a-completer') === -1 && m.indexOf('chiffrée') === -1);
+  const c = lire('confidentialite.html');
+  ['effacées automatiquement chaque 31 août', 'Supabase, Francfort', 'Luciole', 'Lexend'].forEach(function (t) {
+    assert.ok(c.indexOf(t) !== -1, t);
+  });
 });
 
 test('en-têtes publics : icône officielle Boomerang, plus de plante', function () {
