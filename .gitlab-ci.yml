@@ -1,0 +1,13 @@
+# Publication de Boomerang sur la Forge (GitLab Pages).
+# À chaque envoi sur la branche principale, les fichiers du site sont copiés dans public/.
+pages:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - mkdir public
+    - cp -r *.html *.js *.css *.webmanifest *.png .nojekyll icons paquets polices public/
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

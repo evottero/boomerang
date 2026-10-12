@@ -13,7 +13,7 @@ Webapp installable (PWA) qui tourne sur iPad et iPhone, sans compte nominatif. U
 
 Le Mode Classe fonctionne entièrement hors ligne ; la synchronisation ne fait que recopier la progression entre les appareils d'un même élève. Le Mode Photo reste désactivé par défaut et ne s'active qu'après validation (section 15).
 
-Architecture retenue : site statique (HTML, CSS, JavaScript), hébergé gratuitement sur GitHub Pages à l'adresse https://boomerang.tableautablettes.fr (racine du domaine). La racine sert une page d'accueil publique (`index.html`) ; l'app est derrière elle (`app.html`) et n'est accessible qu'avec un code de classe valide. Le site comprend aussi les pages publiques `confidentialite.html` et `mentions-legales.html`, service worker pour le hors ligne, stockage local IndexedDB, qui reste la référence. Synchronisation par un projet Supabase gratuit, en région Europe (Francfort) : la base n'est jamais accessible directement depuis l'app, tout passe par une Edge Function. Aucun compte nominatif, aucun outil d'analyse d'audience.
+Architecture retenue : site statique (HTML, CSS, JavaScript), hébergé gratuitement sur la Forge des communs numériques éducatifs (GitLab Pages) à l'adresse https://votteroeric.forge.apps.education.fr/boomerang/ (ancienne adresse : https://boomerang.tableautablettes.fr, sur GitHub Pages). La racine sert une page d'accueil publique (`index.html`) ; l'app est derrière elle (`app.html`) et n'est accessible qu'avec un code de classe valide. Le site comprend aussi les pages publiques `confidentialite.html` et `mentions-legales.html`, service worker pour le hors ligne, stockage local IndexedDB, qui reste la référence. Synchronisation par un projet Supabase gratuit, en région Europe (Francfort) : la base n'est jamais accessible directement depuis l'app, tout passe par une Edge Function. Aucun compte nominatif, aucun outil d'analyse d'audience.
 
 ## 2. Objectifs et périmètre
 
@@ -137,7 +137,7 @@ Ludification sobre : une plante qui pousse au fil des séances, par avatar. Pas 
 | Mise en pause | Le projet Supabase gratuit se met en pause après 7 jours sans activité : le relancer depuis le tableau de bord Supabase après chaque vacances |
 | Affichage | Portrait et paysage, du smartphone 6 pouces à l'iPad 13 pouces. Zones sûres respectées |
 | Poids | Moins de 2 Mo hors polices et modèle OCR. Chargement en moins de 3 secondes en 4G |
-| Hébergement | Statique, gratuit : GitHub Pages, domaine personnalisé https://boomerang.tableautablettes.fr, à la racine (fichier `CNAME` du dépôt). Tous les chemins sont relatifs : manifeste, service worker, liens et QR codes suivent l'adresse réelle. Fonction de synchronisation sur Supabase, qui n'accepte que les origines listées dans le secret `BOOMERANG_ORIGINE` |
+| Hébergement | Statique, gratuit : la Forge (GitLab Pages, fichier `.gitlab-ci.yml`), à l'adresse https://votteroeric.forge.apps.education.fr/boomerang/, dans un sous-dossier. Tous les chemins sont relatifs : manifeste, service worker, liens et QR codes suivent l'adresse réelle. Fonction de synchronisation sur Supabase, qui n'accepte que les origines listées dans le secret `BOOMERANG_ORIGINE` |
 | Sauvegarde | Export et import manuel de la progression d'un avatar en fichier |
 
 ## 10. Format de données des paquets
